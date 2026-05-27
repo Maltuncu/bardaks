@@ -1,1 +1,6 @@
-PLACEHOLDER
+# bardak's B2B Yönetim Sistemi
+
+Canlı: https://maltuncu.github.io/bardaks/
+
+3 rol: Yönetici / Müdür / İmalathane
+Supabase Auth ile güvenli giriş.
