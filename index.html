@@ -121,15 +121,17 @@
     </div>
   </div>
   <div class="login-card">
-    <h2 id="loginTitle">Kim olarak giriş yapıyorsun?</h2>
-    <div id="userList"><div class="loading">Yükleniyor...</div></div>
-    <div id="pinArea" class="hidden">
-      <div id="pinUserInfo" style="text-align:center;margin-bottom:16px"></div>
-      <input type="password" id="pinInput" inputmode="numeric" maxlength="6" placeholder="PIN" style="text-align:center;font-size:24px;letter-spacing:8px" onkeydown="if(event.key==='Enter')verifyPin()">
-      <button class="btn btn-block mt" onclick="verifyPin()">Giriş Yap</button>
-      <button class="btn btn-sec btn-block mt" onclick="backToUsers()">← Geri</button>
-      <div id="pinError" style="color:var(--red);text-align:center;margin-top:10px;font-size:13px"></div>
-    </div>
+    <h2 id="loginTitle">Giriş Yap</h2>
+    <label>E-posta</label>
+    <input type="email" id="emailInput" placeholder="ornek@bardaks.com" autocomplete="username">
+    <label>Şifre</label>
+    <input type="password" id="passInput" placeholder="Şifre" autocomplete="current-password" onkeydown="if(event.key==='Enter')girisYap()">
+    <label style="display:flex;align-items:center;gap:8px;margin-top:14px;cursor:pointer">
+      <input type="checkbox" id="rememberMe" checked style="width:auto;margin:0">
+      <span style="font-size:14px;color:var(--text)">Beni hatırla</span>
+    </label>
+    <button class="btn btn-block mt" onclick="girisYap()">Giriş Yap</button>
+    <div id="loginError" style="color:var(--red);text-align:center;margin-top:12px;font-size:13px"></div>
   </div>
 </div>
 
@@ -178,42 +180,29 @@ const ROL_AD = { admin:'Yönetici', mudur:'Müdür', imalathane:'İmalathane' };
 let _loginUsers = [];
 let _selectedUser = null;
 
-async function loadUsers(){
-  const r = await sb.from('kullanici_liste').select('*').order('rol');
-  const el = document.getElementById('userList');
-  if(r.error){ el.innerHTML = '<div class="empty">Bağlantı hatası: '+r.error.message+'</div>'; return; }
-  _loginUsers = r.data;
-  el.innerHTML = r.data.map((u,i)=>'<button class="user-btn" onclick="selectUser('+i+')"><div class="user-avatar" style="background:'+ROL_RENK[u.rol]+'">'+u.ad_soyad[0]+'</div><div><div>'+u.ad_soyad+'</div><div class="user-role">'+ROL_AD[u.rol]+'</div></div></button>').join('');
-}
-function selectUser(i){
-  _selectedUser = _loginUsers[i];
-  document.getElementById('userList').classList.add('hidden');
-  document.getElementById('pinArea').classList.remove('hidden');
-  document.getElementById('loginTitle').textContent = 'PIN gir';
-  document.getElementById('pinUserInfo').innerHTML = '<div class="user-avatar" style="background:'+ROL_RENK[_selectedUser.rol]+';margin:0 auto 8px">'+_selectedUser.ad_soyad[0]+'</div><strong>'+_selectedUser.ad_soyad+'</strong><div class="user-role">'+ROL_AD[_selectedUser.rol]+'</div>';
-  document.getElementById('pinInput').value='';
-  document.getElementById('pinError').textContent='';
-  setTimeout(function(){document.getElementById('pinInput').focus();},100);
-}
-function backToUsers(){
-  document.getElementById('userList').classList.remove('hidden');
-  document.getElementById('pinArea').classList.add('hidden');
-  document.getElementById('loginTitle').textContent = 'Kim olarak giriş yapıyorsun?';
-}
-async function verifyPin(){
-  const pin = document.getElementById('pinInput').value.trim();
-  if(!pin){ return; }
-  const r = await sb.rpc('pin_giris', { p_kullanici_id:_selectedUser.id, p_pin:pin });
-  if(r.error || !r.data || !r.data.length){
-    document.getElementById('pinError').textContent = 'Hatalı PIN';
-    document.getElementById('pinInput').value='';
+// ===== GİRİŞ (Supabase Auth - e-posta+şifre) =====
+async function girisYap(){
+  const email = document.getElementById('emailInput').value.trim();
+  const pass = document.getElementById('passInput').value;
+  const remember = document.getElementById('rememberMe').checked;
+  const errEl = document.getElementById('loginError');
+  if(!email || !pass){ errEl.textContent='E-posta ve şifre gir'; return; }
+  errEl.textContent='Giriş yapılıyor...';
+  // Beni hatırla işaretli değilse oturum sadece sekme açıkken kalsın
+  if(remember){ localStorage.setItem('bardaks_remember','1'); }
+  else { localStorage.removeItem('bardaks_remember'); }
+  const r = await sb.auth.signInWithPassword({ email: email, password: pass });
+  if(r.error){ errEl.textContent = 'E-posta veya şifre hatalı'; return; }
+  const ru = await sb.from('kullanicilar').select('*').eq('auth_id', r.data.user.id).single();
+  if(ru.error || !ru.data){
+    errEl.textContent = 'Kullanıcı tanımlı değil, yöneticiye bildir';
+    await sb.auth.signOut();
     return;
   }
-  doLogin(r.data[0]);
+  doLogin(ru.data);
 }
 function doLogin(u){
   CURRENT = u;
-  sessionStorage.setItem('bardaks_user', JSON.stringify(u));
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('currentUserName').textContent = u.ad_soyad;
@@ -223,8 +212,9 @@ function doLogin(u){
   else showPage('panel');
   refreshNotifs();
 }
-function logout(){
-  sessionStorage.removeItem('bardaks_user');
+async function logout(){
+  localStorage.removeItem('bardaks_remember');
+  await sb.auth.signOut();
   CURRENT=null;
   location.reload();
 }
@@ -272,9 +262,17 @@ async function loadCoreData(){
 }
 window.addEventListener('DOMContentLoaded', async function(){
   await loadCoreData();
-  const saved = sessionStorage.getItem('bardaks_user');
-  if(saved){ try{ doLogin(JSON.parse(saved)); return; }catch(e){} }
-  loadUsers();
+  const remember = localStorage.getItem('bardaks_remember')==='1';
+  const sess = await sb.auth.getSession();
+  if(sess.data && sess.data.session){
+    if(!remember){
+      // Beni hatırla yoksa oturumu kapat, giriş ekranı görünsün
+      await sb.auth.signOut();
+      return;
+    }
+    const ru = await sb.from('kullanicilar').select('*').eq('auth_id', sess.data.session.user.id).single();
+    if(ru.data){ doLogin(ru.data); return; }
+  }
 });
 
 function initRealtime(){
