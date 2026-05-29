@@ -129,6 +129,20 @@
   .pill { background:var(--surface2); border:1px solid var(--border); color:var(--text-dim); padding:7px 14px; border-radius:20px; cursor:pointer; font-size:13px; white-space:nowrap; }
   .pill.active { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:700; }
   .hidden { display:none !important; }
+  .urun-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+  .urun-kart { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; display:flex; flex-direction:column; }
+  .urun-foto { width:100%; aspect-ratio:1/1; object-fit:cover; background:var(--surface2); display:flex; align-items:center; justify-content:center; font-size:32px; color:var(--text-dim); cursor:pointer; position:relative; }
+  .urun-foto img { width:100%; height:100%; object-fit:cover; }
+  .urun-foto .foto-btn { position:absolute; bottom:6px; right:6px; background:rgba(30,91,168,.92); color:#fff; border:none; border-radius:7px; padding:5px 9px; font-size:11px; cursor:pointer; font-weight:600; }
+  .urun-body { padding:10px 12px; flex:1; display:flex; flex-direction:column; gap:3px; }
+  .urun-ad { font-weight:700; font-size:14px; }
+  .urun-meta { font-size:12px; color:var(--text-dim); }
+  .urun-fiyat { font-weight:700; color:var(--accent); font-size:15px; margin-top:2px; }
+  .urun-actions { display:flex; gap:6px; padding:0 12px 12px; }
+  .urun-actions button { flex:1; font-size:12px; padding:6px; }
+  .kat-baslik { font-size:14px; font-weight:700; margin:18px 0 10px; text-transform:capitalize; display:flex; align-items:center; gap:8px; }
+  .kat-baslik::after { content:''; flex:1; height:1px; background:var(--border); }
+  .foto-yukleniyor { position:absolute; inset:0; background:rgba(255,255,255,.85); display:flex; align-items:center; justify-content:center; font-size:13px; color:var(--accent); font-weight:600; }
 </style>
 </head>
 <body>
@@ -174,6 +188,7 @@
     <div id="page-analiz" class="page"></div>
     <div id="page-gunozeti" class="page"></div>
     <div id="page-sohbet" class="page"></div>
+    <div id="page-urunler" class="page"></div>
   </div>
   <div class="bottomnav" id="bottomnav"></div>
 </div>
@@ -242,9 +257,9 @@ function buildNav(){
   const nav = document.getElementById('bottomnav');
   let items = [];
   if(CURRENT.rol==='imalathane'){
-    items = [{id:'uretim', ico:'🏭', label:'Üretim'},{id:'sohbet', ico:'💬', label:'Sohbet'},{id:'gunozeti', ico:'📋', label:'Notlar'}];
+    items = [{id:'uretim', ico:'🏭', label:'Üretim'},{id:'urunler', ico:'🍰', label:'Ürünler'},{id:'sohbet', ico:'💬', label:'Sohbet'},{id:'gunozeti', ico:'📋', label:'Notlar'}];
   } else {
-    items = [{id:'panel', ico:'📊', label:'Panel'},{id:'siparis', ico:'🧾', label:'Sipariş'},{id:'sohbet', ico:'💬', label:'Sohbet'},{id:'firmalar', ico:'🏢', label:'Firmalar'},{id:'analiz', ico:'📈', label:'Analiz'},{id:'gunozeti', ico:'📋', label:'Gün Özeti'}];
+    items = [{id:'panel', ico:'📊', label:'Panel'},{id:'siparis', ico:'🧾', label:'Sipariş'},{id:'urunler', ico:'🍰', label:'Ürünler'},{id:'sohbet', ico:'💬', label:'Sohbet'},{id:'firmalar', ico:'🏢', label:'Firmalar'},{id:'analiz', ico:'📈', label:'Analiz'},{id:'gunozeti', ico:'📋', label:'Gün Özeti'}];
   }
   nav.innerHTML = items.map(function(i){
     const badge = i.id==='sohbet' ? '<span class="nav-badge hidden" id="sohbetBadge">0</span>' : '';
@@ -264,6 +279,7 @@ function showPage(id){
   if(id==='analiz') renderAnaliz();
   if(id==='gunozeti') renderGunOzeti();
   if(id==='sohbet') renderSohbet();
+  if(id==='urunler') renderUrunler();
 }
 function openModal(html){
   document.getElementById('modalContent').innerHTML = html;
@@ -549,7 +565,16 @@ async function openFirmaDetay(fid){
   const fiyatlar=FIYATLAR.filter(function(p){return p.firma_id===fid;});
   const tanimliUrunIds = fiyatlar.map(function(p){return p.urun_id;});
   const eklenebilir = URUNLER.filter(function(u){return tanimliUrunIds.indexOf(u.id)<0;});
-  openModal('<div class="modal-head"><h3>'+f.ad+'</h3><button class="modal-close" onclick="closeModal()">×</button></div><div style="font-size:13px;color:var(--text-dim);margin-bottom:14px">'+(f.resmi_unvan||'')+' '+(f.vergi_no?'· VKN: '+f.vergi_no:'')+'<br>'+(f.yetkili_kisi?'👤 '+f.yetkili_kisi:'')+' '+(f.telefon?'· 📞 '+f.telefon:'')+'<br>Ödeme: '+f.odeme_tipi+' · Vade: '+f.vade_gun+' gün</div><div class="card-title">Bu Firmaya Tanımlı Ürünler & Fiyatlar</div><div class="table-wrap"><table><tr><th>Ürün</th><th>Fiyat (Hariç)</th><th></th></tr>'+(fiyatlar.map(function(p){return '<tr><td>'+p.urun_ad+'</td><td>'+TL(p.birim_fiyat_kdv_haric)+'</td><td style="text-align:right"><button class="btn btn-sec btn-sm" onclick="fiyatGuncelle(\''+fid+'\',\''+p.urun_id+'\',\''+p.urun_ad.replace(/'/g,"")+'\','+p.birim_fiyat_kdv_haric+')">✏️</button> <button class="btn btn-sec btn-sm" onclick="urunCikar(\''+fid+'\',\''+p.urun_id+'\',\''+p.urun_ad.replace(/'/g,"")+'\')">🗑️</button></td></tr>';}).join('')||'<tr><td colspan=3 class="empty">Ürün yok</td></tr>')+'</table></div><div class="mt"><label>Ürün Ekle</label><div class="row"><select id="feUrun" style="flex:3">'+eklenebilir.map(function(u){return '<option value="'+u.id+'">'+u.ad+'</option>';}).join('')+'</select><input type="number" id="feFiyat" placeholder="Fiyat" style="flex:1.5"><button class="btn" style="flex:1" onclick="urunEkle(\''+fid+'\')">Ekle</button></div></div>');
+  openModal('<div class="modal-head"><h3>'+f.ad+'</h3><button class="modal-close" onclick="closeModal()">×</button></div><div style="font-size:13px;color:var(--text-dim);margin-bottom:14px">'+(f.resmi_unvan||'')+' '+(f.vergi_no?'· VKN: '+f.vergi_no:'')+'<br>'+(f.yetkili_kisi?'👤 '+f.yetkili_kisi:'')+' '+(f.telefon?'· 📞 '+f.telefon:'')+'<br>Ödeme: '+f.odeme_tipi+' · Vade: '+f.vade_gun+' gün</div><div class="card-title">Bu Firmaya Tanımlı Ürünler & Fiyatlar</div><div class="table-wrap"><table><tr><th>Ürün</th><th>Fiyat (Hariç)</th><th></th></tr>'+(fiyatlar.map(function(p){return '<tr><td>'+p.urun_ad+'</td><td>'+TL(p.birim_fiyat_kdv_haric)+'</td><td style="text-align:right"><button class="btn btn-sec btn-sm" onclick="fiyatGuncelle(\''+fid+'\',\''+p.urun_id+'\',\''+p.urun_ad.replace(/'/g,"")+'\','+p.birim_fiyat_kdv_haric+')">✏️</button> <button class="btn btn-sec btn-sm" onclick="urunCikar(\''+fid+'\',\''+p.urun_id+'\',\''+p.urun_ad.replace(/'/g,"")+'\')">🗑️</button></td></tr>';}).join('')||'<tr><td colspan=3 class="empty">Ürün yok</td></tr>')+'</table></div><div class="mt"><label>Ürün Ekle</label><div class="row"><select id="feUrun" style="flex:3" onchange="feFiyatDoldur()">'+eklenebilir.map(function(u){return '<option value="'+u.id+'" data-fiyat="'+(u.varsayilan_fiyat||'')+'">'+u.ad+(u.varsayilan_fiyat?' ('+u.varsayilan_fiyat+'₺)':'')+'</option>';}).join('')+'</select><input type="number" id="feFiyat" placeholder="Fiyat" style="flex:1.5"><button class="btn" style="flex:1" onclick="urunEkle(\''+fid+'\')">Ekle</button></div><div style="font-size:11px;color:var(--text-dim);margin-top:4px">Fiyat üründen otomatik gelir, bu firmaya özel değiştirebilirsin.</div></div>');
+  feFiyatDoldur();
+}
+function feFiyatDoldur(){
+  const sel = document.getElementById('feUrun');
+  if(!sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  const f = opt ? opt.getAttribute('data-fiyat') : '';
+  const inp = document.getElementById('feFiyat');
+  if(inp && f) inp.value = f;
 }
 async function urunEkle(fid){
   const uid=document.getElementById('feUrun').value;
@@ -854,6 +879,132 @@ async function acGunDetay(tarih){
     }).join('');
   }
   openModal(html);
+}
+
+// ============ ÜRÜNLER SEKMESİ (Merkezi Katalog) ============
+const KAT_ETIKET = { cup:'🥤 Cup', pasta:'🍰 Pasta', kruvasan:'🥐 Kruvasan', magnolia:'🍮 Magnolia', diger:'📦 Diğer' };
+const KAT_SIRA = ['cup','pasta','kruvasan','magnolia','diger'];
+
+async function renderUrunler(){
+  const el = document.getElementById('page-urunler');
+  el.innerHTML = '<div class="flex-between mb"><h1 class="page-title">🍰 Ürünler</h1><button class="btn" onclick="openYeniUrun()">+ Yeni Ürün</button></div><div class="page-desc">Merkezi ürün kataloğu · Firmalara buradan ürün eklenir</div><div id="urunlerList"><div class="loading">Yükleniyor...</div></div>';
+  const r = await sb.from('urunler').select('*').eq('aktif',true).order('ad');
+  const urunler = r.data || [];
+  const list = document.getElementById('urunlerList');
+  if(!urunler.length){ list.innerHTML='<div class="empty"><div class="empty-ico">🍰</div>Henüz ürün yok</div>'; return; }
+  const gruplar = {};
+  urunler.forEach(function(u){ const k=u.kategori||'diger'; if(!gruplar[k]) gruplar[k]=[]; gruplar[k].push(u); });
+  let html = '';
+  const sirali = KAT_SIRA.filter(function(k){return gruplar[k];}).concat(Object.keys(gruplar).filter(function(k){return KAT_SIRA.indexOf(k)<0;}));
+  sirali.forEach(function(kat){
+    html += '<div class="kat-baslik">'+(KAT_ETIKET[kat]||kat)+' <span style="font-size:12px;color:var(--text-dim);font-weight:400">('+gruplar[kat].length+')</span></div><div class="urun-grid">';
+    gruplar[kat].forEach(function(u){
+      const foto = u.gorsel_url ? '<img src="'+u.gorsel_url+'" alt="'+escapeHtml(u.ad)+'">' : '🍰';
+      const fiyat = u.varsayilan_fiyat ? TL(u.varsayilan_fiyat) : '<span style="color:var(--text-dim);font-weight:400">fiyat yok</span>';
+      const gramaj = u.gramaj ? '<span class="urun-meta">'+escapeHtml(u.gramaj)+'</span>' : '';
+      html += '<div class="urun-kart"><div class="urun-foto" id="foto-'+u.id+'">'+foto+'<button class="foto-btn" onclick="secFoto(\''+u.id+'\')">📷 '+(u.gorsel_url?'Değiştir':'Foto')+'</button></div><div class="urun-body"><div class="urun-ad">'+escapeHtml(u.ad)+'</div>'+gramaj+'<div class="urun-fiyat">'+fiyat+'</div></div><div class="urun-actions"><button class="btn btn-sec btn-sm" onclick="openUrunDuzenle(\''+u.id+'\')">✏️ Düzenle</button></div></div>';
+    });
+    html += '</div>';
+  });
+  list.innerHTML = html;
+}
+
+function secFoto(urunId){
+  let inp = document.getElementById('gizliFotoInput');
+  if(!inp){
+    inp = document.createElement('input');
+    inp.type='file'; inp.accept='image/*'; inp.id='gizliFotoInput'; inp.style.display='none';
+    document.body.appendChild(inp);
+  }
+  inp.onchange = function(){ if(inp.files && inp.files[0]) yukleUrunFoto(urunId, inp.files[0]); inp.value=''; };
+  inp.click();
+}
+
+async function yukleUrunFoto(urunId, file){
+  const fotoDiv = document.getElementById('foto-'+urunId);
+  if(fotoDiv){ const ld=document.createElement('div'); ld.className='foto-yukleniyor'; ld.textContent='Yükleniyor...'; ld.id='ld-'+urunId; fotoDiv.appendChild(ld); }
+  try {
+    const optimized = await optimizeImage(file, 1000, 0.82);
+    const path = urunId + '-' + Date.now() + '.jpg';
+    const up = await sb.storage.from('urun-gorselleri').upload(path, optimized, { contentType:'image/jpeg', upsert:true });
+    if(up.error) throw up.error;
+    const pub = sb.storage.from('urun-gorselleri').getPublicUrl(path);
+    const url = pub.data.publicUrl;
+    const r = await sb.from('urunler').update({ gorsel_url:url, guncelleme:new Date().toISOString() }).eq('id',urunId);
+    if(r.error) throw r.error;
+    toast('✅ Görsel yüklendi','');
+    renderUrunler();
+  } catch(e){
+    const ld=document.getElementById('ld-'+urunId); if(ld) ld.remove();
+    alert('Görsel yüklenemedi: '+(e.message||e));
+  }
+}
+
+function optimizeImage(file, maxW, quality){
+  return new Promise(function(resolve, reject){
+    const reader = new FileReader();
+    reader.onload = function(e){
+      const img = new Image();
+      img.onload = function(){
+        let w = img.width, h = img.height;
+        if(w > maxW){ h = Math.round(h * maxW / w); w = maxW; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(function(blob){ blob ? resolve(blob) : reject(new Error('Dönüştürme hatası')); }, 'image/jpeg', quality);
+      };
+      img.onerror = function(){ reject(new Error('Geçersiz görsel')); };
+      img.src = e.target.result;
+    };
+    reader.onerror = function(){ reject(new Error('Dosya okunamadı')); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function openYeniUrun(){
+  openModal('<div class="modal-head"><h3>Yeni Ürün</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Ürün Adı *</label><input id="nuAd" placeholder="örn: Lotus Cup"><label>Kategori *</label><select id="nuKat"><option value="cup">Cup</option><option value="pasta">Pasta</option><option value="kruvasan">Kruvasan</option><option value="magnolia">Magnolia</option><option value="diger">Diğer</option></select><div class="row"><div><label>Varsayılan Fiyat (KDV hariç)</label><input type="number" id="nuFiyat" placeholder="örn: 95"></div><div><label>Gramaj</label><input id="nuGramaj" placeholder="örn: 200gr"></div></div><label>KDV Oranı (%)</label><input type="number" id="nuKdv" value="1"><button class="btn btn-block mt" onclick="kaydetUrun()">Ürünü Ekle</button><div style="font-size:12px;color:var(--text-dim);margin-top:8px">Görseli ekledikten sonra karttan 📷 ile yükleyebilirsin.</div>');
+}
+async function kaydetUrun(){
+  const ad = document.getElementById('nuAd').value.trim();
+  if(!ad){ alert('Ürün adı zorunlu'); return; }
+  const kat = document.getElementById('nuKat').value;
+  const fiyat = document.getElementById('nuFiyat').value;
+  const gramaj = document.getElementById('nuGramaj').value.trim();
+  const kdv = document.getElementById('nuKdv').value;
+  const rec = { ad:ad, kategori:kat, aktif:true, kdv_orani:Number(kdv)||1 };
+  if(fiyat) rec.varsayilan_fiyat = Number(fiyat);
+  if(gramaj) rec.gramaj = gramaj;
+  const r = await sb.from('urunler').insert(rec);
+  if(r.error){ alert('Hata: '+r.error.message); return; }
+  closeModal(); toast('✅ Ürün eklendi',ad); renderUrunler();
+}
+
+async function openUrunDuzenle(urunId){
+  const r = await sb.from('urunler').select('*').eq('id',urunId).single();
+  const u = r.data; if(!u) return;
+  const katOpts = ['cup','pasta','kruvasan','magnolia','diger'].map(function(k){return '<option value="'+k+'"'+(u.kategori===k?' selected':'')+'>'+(KAT_ETIKET[k]||k).replace(/^.. /,'')+'</option>';}).join('');
+  openModal('<div class="modal-head"><h3>✏️ '+escapeHtml(u.ad)+'</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Ürün Adı</label><input id="duAd" value="'+escapeHtml(u.ad)+'"><label>Kategori</label><select id="duKat">'+katOpts+'</select><div class="row"><div><label>Varsayılan Fiyat (KDV hariç)</label><input type="number" id="duFiyat" value="'+(u.varsayilan_fiyat||'')+'"></div><div><label>Gramaj</label><input id="duGramaj" value="'+(u.gramaj||'')+'"></div></div><label>KDV Oranı (%)</label><input type="number" id="duKdv" value="'+(u.kdv_orani||1)+'"><div class="row mt"><button class="btn" style="flex:2" onclick="kaydetUrunDuzenle(\''+urunId+'\')">Kaydet</button><button class="btn btn-danger" style="flex:1" onclick="silUrun(\''+urunId+'\',\''+escapeHtml(u.ad).replace(/'/g,"")+'\')">Sil</button></div>');
+}
+async function kaydetUrunDuzenle(urunId){
+  const rec = {
+    ad: document.getElementById('duAd').value.trim(),
+    kategori: document.getElementById('duKat').value,
+    kdv_orani: Number(document.getElementById('duKdv').value)||1,
+    guncelleme: new Date().toISOString()
+  };
+  const fiyat = document.getElementById('duFiyat').value;
+  const gramaj = document.getElementById('duGramaj').value.trim();
+  rec.varsayilan_fiyat = fiyat ? Number(fiyat) : null;
+  rec.gramaj = gramaj || null;
+  if(!rec.ad){ alert('Ürün adı zorunlu'); return; }
+  const r = await sb.from('urunler').update(rec).eq('id',urunId);
+  if(r.error){ alert('Hata: '+r.error.message); return; }
+  closeModal(); toast('✅ Güncellendi',rec.ad); renderUrunler();
+}
+async function silUrun(urunId, ad){
+  if(!confirm(ad+' ürünü pasif yapılsın mı? (Firmalardaki kayıtlar etkilenmez)')) return;
+  await sb.from('urunler').update({aktif:false}).eq('id',urunId);
+  closeModal(); toast('🗑️ Ürün kaldırıldı',''); renderUrunler();
 }
 </script>
 </body>
