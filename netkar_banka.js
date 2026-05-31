@@ -157,3 +157,82 @@
 
   window.NB={ close:close, tab:render, ek:ek, saveEk:saveEk, delEk:delEk, addHesap:addHesap, addHar:addHar };
 })();
+
+/* === Auth UX katmanı (companion): mail hatirla + sifremi unuttum + recovery ===
+   index.html'e dokunmaz; sb global'ini kullanir. Login ekraninda calisir. */
+(function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+  function ready(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded',fn); }
+  var isRecovery = /type=recovery/.test(location.hash || '');
+
+  function hookAuth(tries){
+    tries = (tries==null)?60:tries;
+    if(typeof sb==='undefined' || !sb || !sb.auth){ if(tries>0) setTimeout(function(){hookAuth(tries-1);},200); return; }
+    try{
+      sb.auth.onAuthStateChange(function(event, session){
+        if(event==='PASSWORD_RECOVERY'){ showRecovery(); }
+        if(event==='SIGNED_IN' && session && session.user && session.user.email){
+          try{ localStorage.setItem('bardaks_last_email', session.user.email); }catch(e){}
+        }
+      });
+    }catch(e){ if(tries>0) setTimeout(function(){hookAuth(tries-1);},200); }
+  }
+  hookAuth();
+
+  ready(function(){
+    try{
+      var le = localStorage.getItem('bardaks_last_email');
+      var ei = $('emailInput');
+      if(le && ei && !ei.value){ ei.value = le; var pi=$('passInput'); if(pi) setTimeout(function(){ try{pi.focus();}catch(e){} },80); }
+    }catch(e){}
+    var card = document.querySelector('#login .login-card');
+    if(card && !$('nbForgot')){
+      var d=document.createElement('div'); d.style.cssText='text-align:center;margin-top:10px';
+      d.innerHTML='<a href="#" id="nbForgot" style="font-size:13px;color:#1e5ba8;text-decoration:none">Sifremi unuttum</a>';
+      card.appendChild(d);
+      $('nbForgot').addEventListener('click', function(e){ e.preventDefault(); forgot(); });
+    }
+    if(isRecovery) showRecovery();
+  });
+
+  async function forgot(){
+    var ei=$('emailInput'), err=$('loginError');
+    var email = ei ? ei.value.trim() : '';
+    if(!email){ if(err){ err.style.color='#c0392b'; err.textContent='Once e-postani yaz, sonra "Sifremi unuttum"a bas'; } return; }
+    if(err){ err.style.color='#6b7b8f'; err.textContent='Baglanti gonderiliyor...'; }
+    try{
+      var r=await sb.auth.resetPasswordForEmail(email,{ redirectTo: location.origin + location.pathname });
+      if(r.error) throw r.error;
+      if(err){ err.style.color='#2e8b57'; err.textContent=email+' adresine sifirlama baglantisi gonderildi. Mailindeki linke tikla.'; }
+    }catch(e){ if(err){ err.style.color='#c0392b'; err.textContent='Hata: '+(e.message||e); } }
+  }
+
+  function showRecovery(){
+    if($('nbRecovery')){ $('nbRecovery').style.display='flex'; return; }
+    var ov=document.createElement('div'); ov.id='nbRecovery';
+    ov.style.cssText='position:fixed;inset:0;z-index:99999;background:radial-gradient(ellipse at top,#fff,#faf3df 70%);display:flex;align-items:center;justify-content:center;padding:20px;font-family:inherit';
+    ov.innerHTML='<div style="background:#fff;border:1px solid #e3d8ba;border-radius:12px;padding:28px;width:100%;max-width:360px;box-shadow:0 4px 20px rgba(30,91,168,.12)">'
+      +'<h2 style="font-size:18px;margin:0 0 6px;color:#1a2b40">Yeni Sifre Belirle</h2>'
+      +'<div style="font-size:13px;color:#6b7b8f;margin-bottom:14px">Hesabin icin yeni bir sifre gir.</div>'
+      +'<input type="password" id="nbP1" placeholder="Yeni sifre (en az 6)" style="width:100%;padding:11px 13px;border:1px solid #e3d8ba;border-radius:9px;margin-bottom:8px;box-sizing:border-box;font-size:15px">'
+      +'<input type="password" id="nbP2" placeholder="Tekrar" style="width:100%;padding:11px 13px;border:1px solid #e3d8ba;border-radius:9px;box-sizing:border-box;font-size:15px">'
+      +'<button id="nbSave" style="width:100%;margin-top:14px;background:#1e5ba8;color:#fff;border:none;font-weight:700;padding:12px;border-radius:9px;cursor:pointer;font-size:14px">Kaydet</button>'
+      +'<div id="nbRErr" style="text-align:center;margin-top:12px;font-size:13px"></div></div>';
+    document.body.appendChild(ov);
+    $('nbSave').addEventListener('click', saveNewPass);
+    $('nbP2').addEventListener('keydown', function(e){ if(e.key==='Enter') saveNewPass(); });
+  }
+
+  async function saveNewPass(){
+    var p1=$('nbP1').value, p2=$('nbP2').value, err=$('nbRErr');
+    if((p1||'').length<6){ err.style.color='#c0392b'; err.textContent='En az 6 karakter'; return; }
+    if(p1!==p2){ err.style.color='#c0392b'; err.textContent='Sifreler uyusmuyor'; return; }
+    try{
+      var r=await sb.auth.updateUser({ password:p1 });
+      if(r.error) throw r.error;
+      err.style.color='#2e8b57'; err.textContent='Sifre guncellendi, yonlendiriliyorsun...';
+      setTimeout(function(){ location.href = location.origin + location.pathname; }, 1200);
+    }catch(e){ err.style.color='#c0392b'; err.textContent='Hata: '+(e.message||e); }
+  }
+})();
