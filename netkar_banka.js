@@ -165,15 +165,30 @@
   function $(id){ return document.getElementById(id); }
   function ready(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded',fn); }
   var isRecovery = /type=recovery/.test(location.hash || '');
+  var coreReloaded=false;
 
+  function reloadCore(){
+    try{
+      if(typeof loadCoreData!=='function') return;
+      loadCoreData().then(function(){
+        try{
+          if(typeof CURRENT==='undefined' || !CURRENT || typeof showPage!=='function') return;
+          var a=document.querySelector('.nav-item.active');
+          var pid=a?a.getAttribute('data-page'):(CURRENT.rol==='imalathane'?'uretim':'panel');
+          showPage(pid);
+        }catch(e){}
+      });
+    }catch(e){}
+  }
   function hookAuth(tries){
     tries = (tries==null)?60:tries;
     if(typeof sb==='undefined' || !sb || !sb.auth){ if(tries>0) setTimeout(function(){hookAuth(tries-1);},200); return; }
     try{
       sb.auth.onAuthStateChange(function(event, session){
         if(event==='PASSWORD_RECOVERY'){ showRecovery(); }
-        if(event==='SIGNED_IN' && session && session.user && session.user.email){
-          try{ localStorage.setItem('bardaks_last_email', session.user.email); }catch(e){}
+        if(event==='SIGNED_IN' && session && session.user){
+          if(session.user.email){ try{ localStorage.setItem('bardaks_last_email', session.user.email); }catch(e){} }
+          if(!coreReloaded){ coreReloaded=true; setTimeout(reloadCore, 700); }
         }
       });
     }catch(e){ if(tries>0) setTimeout(function(){hookAuth(tries-1);},200); }
