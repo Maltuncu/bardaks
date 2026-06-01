@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bardaks B2B — Aylık Rapor</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 <style>
   :root{
     --bg:#0f1115; --surface:#181b22; --surface2:#1f232c; --border:#2a2f3a;
@@ -27,6 +28,7 @@
   .btn{background:var(--accent);color:#1a1208;border:none;font-weight:700;padding:11px 16px;
     border-radius:9px;cursor:pointer;font-size:14px}
   .btn.sec{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+  .btn:disabled{opacity:.6;cursor:default}
   .btn:hover{filter:brightness(1.08)}
   .loading,.msg{text-align:center;color:var(--dim);padding:40px 20px}
   /* ===== RAPOR KAĞIDI (hem ekran hem yazdırma) ===== */
@@ -57,13 +59,22 @@
   #login label{display:block;font-size:13px;color:var(--dim);margin:10px 0 4px}
   #login input{width:100%}
   #loginErr{font-size:13px;margin-top:10px;min-height:18px}
+  /* Paylaş menüsü */
+  #shareOv{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:60;display:none;align-items:center;justify-content:center;padding:20px}
+  #shareOv.open{display:flex}
+  #shareCard{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;width:100%;max-width:340px}
+  #shareCard h3{font-size:16px;margin-bottom:4px}
+  #shareCard p{font-size:12px;color:var(--dim);margin-bottom:14px}
+  .share-btn{display:flex;align-items:center;gap:10px;width:100%;padding:13px;border-radius:10px;border:1px solid var(--border);
+    background:var(--surface2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;text-align:left;text-decoration:none}
+  .share-btn:hover{border-color:var(--accent)}
+  .share-btn .ic{font-size:18px;width:24px;text-align:center}
   .hidden{display:none!important}
   @media print{
-    body{background:#fff} .topbar,.controls,.no-print{display:none!important}
+    body{background:#fff} .topbar,.controls,.no-print,#shareOv{display:none!important}
     .wrap{max-width:none;padding:0;margin:0}
     #sheet{box-shadow:none;border-radius:0;padding:0}
     .wk{break-inside:avoid} .firma-blk{break-inside:avoid} table{break-inside:avoid}
-    .section-title{break-before:auto}
   }
 </style>
 </head>
@@ -92,10 +103,23 @@
     <div class="fld"><label>Yıl</label><select id="selYil" onchange="onYilChange()"></select></div>
     <div class="fld"><label>Ay</label><select id="selAy" onchange="render()"></select></div>
     <div class="fld" style="flex:1"><label>Firma</label><select id="selFirma" onchange="render()"><option value="">Tümü</option></select></div>
-    <button class="btn" onclick="window.print()">📄 PDF / Yazdır</button>
+    <button class="btn" id="btnIlet" onclick="ilet()">📤 İlet</button>
+    <button class="btn sec" onclick="window.print()">🖨 Yazdır</button>
     <button class="btn sec" onclick="loadAll(true)">↻ Yenile</button>
   </div>
   <div id="out"><div class="loading">Veri yükleniyor…</div></div>
+</div>
+
+<!-- Paylaş menüsü (Web Share desteklenmiyorsa) -->
+<div id="shareOv" onclick="if(event.target===this)closeShare()">
+  <div id="shareCard">
+    <h3>📤 Raporu İlet</h3>
+    <p id="shareDesc">WhatsApp veya e-posta ile gönder.</p>
+    <a class="share-btn" id="shWa" target="_blank" rel="noopener"><span class="ic">🟢</span> WhatsApp ile gönder</a>
+    <a class="share-btn" id="shMail"><span class="ic">✉️</span> E-posta ile gönder</a>
+    <button class="share-btn" id="shPdf" onclick="downloadPdf()"><span class="ic">📄</span> PDF indir (sonra ekle)</button>
+    <button class="share-btn" onclick="closeShare()" style="justify-content:center;background:none"><span>Kapat</span></button>
+  </div>
 </div>
 
 <script>
@@ -109,6 +133,7 @@ const ADET=n=>(Number(n)||0).toLocaleString('tr-TR');
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 let SIP=[], KAL=[], FIRMA={}, FIRMA_INFO={};
+let LAST_FILE=null, LAST_URL=null;
 
 // ---- Açılış: oturum kontrol ----
 (async function init(){
@@ -159,7 +184,6 @@ async function loadAll(force){
 }
 
 function buildSelectors(){
-  // mevcut yıl-ay kombinasyonları
   const yillar=new Set(), aylarByYil={};
   SIP.forEach(s=>{
     const y=s.tarih.slice(0,4), m=parseInt(s.tarih.slice(5,7),10);
@@ -167,9 +191,7 @@ function buildSelectors(){
   });
   window._aylarByYil=aylarByYil;
   const ys=[...yillar].sort().reverse();
-  const selY=document.getElementById('selYil');
-  selY.innerHTML=ys.map(y=>`<option value="${y}">${y}</option>`).join('');
-  // firma listesi (sadece veride olanlar)
+  document.getElementById('selYil').innerHTML=ys.map(y=>`<option value="${y}">${y}</option>`).join('');
   const fids=[...new Set(SIP.map(s=>s.firma_id))].filter(id=>FIRMA[id]).sort((a,b)=>FIRMA[a].localeCompare(FIRMA[b],'tr'));
   document.getElementById('selFirma').innerHTML='<option value="">Tümü</option>'+fids.map(id=>`<option value="${id}">${esc(FIRMA[id])}</option>`).join('');
   onYilChange(true);
@@ -178,32 +200,28 @@ function buildSelectors(){
 function onYilChange(keepRender){
   const y=document.getElementById('selYil').value;
   const months=[...(window._aylarByYil[y]||new Set())].sort((a,b)=>b-a);
-  const selA=document.getElementById('selAy');
-  selA.innerHTML=months.map(m=>`<option value="${m}">${AYLAR[m-1]}</option>`).join('');
+  document.getElementById('selAy').innerHTML=months.map(m=>`<option value="${m}">${AYLAR[m-1]}</option>`).join('');
   if(!keepRender) render();
 }
 
 function render(){
   const y=document.getElementById('selYil').value;
   const m=parseInt(document.getElementById('selAy').value,10);
-  const fFilter=document.getElementById('selFirma').value; // '' = tümü
+  const fFilter=document.getElementById('selFirma').value;
   const out=document.getElementById('out');
   if(!y||!m){ out.innerHTML='<div class="msg">Ay seçiniz.</div>'; return; }
 
-  // bu ayın siparişleri
   let sips=SIP.filter(s=>s.tarih.slice(0,4)===y && parseInt(s.tarih.slice(5,7),10)===m);
   if(fFilter) sips=sips.filter(s=>s.firma_id===fFilter);
   const sipById={}; sips.forEach(s=>sipById[s.id]=s);
   const kalemler=KAL.filter(k=>sipById[k.siparis_id]);
 
-  // haftalara böl (gün: 1-7,8-14,15-21,22-28,29+)
   const hafta=g=> g<=7?0 : g<=14?1 : g<=21?2 : g<=28?3 : 4;
   const haftaAralik=['01–07','08–14','15–21','22–28','29–'+new Date(y,m,0).getDate()];
   const weeks=[[],[],[],[],[]];
   sips.forEach(s=>{ weeks[hafta(parseInt(s.tarih.slice(8,10),10))].push(s); });
 
   let html='<div id="sheet">';
-  // başlık
   const fInfo=fFilter?FIRMA_INFO[fFilter]:null;
   html+=`<div class="r-head">
     <div><div class="r-logo">bardak's</div><div class="r-sub">B2B Aylık Sipariş / Fatura Raporu</div></div>
@@ -212,15 +230,12 @@ function render(){
   html+=`<h2>${AYLAR[m-1]} ${y}${fFilter?' · '+esc(FIRMA[fFilter]):''}</h2>`;
   html+=`<div class="r-meta">${fInfo?(esc(fInfo.resmi_unvan||FIRMA[fFilter])+(fInfo.vergi_no?' · VKN: '+esc(fInfo.vergi_no):'')+'<br>'):''}Oluşturma: ${new Date().toLocaleDateString('tr-TR')} · ${sips.length} sipariş</div>`;
 
-  // ---- HAFTALIK DÖKÜM ----
   weeks.forEach((wsips,wi)=>{
     if(!wsips.length) return;
     html+=`<div class="wk">HAFTA ${wi+1} · ${haftaAralik[wi]} ${AYLAR[m-1]}</div>`;
-    // firma -> urun toplamları
     const byFirma={};
     wsips.forEach(s=>{
-      const fk=s.firma_id;
-      byFirma[fk]=byFirma[fk]||{};
+      const fk=s.firma_id; byFirma[fk]=byFirma[fk]||{};
       kalemler.filter(k=>k.siparis_id===s.id).forEach(k=>{
         const u=byFirma[fk][k.urun_ad]=byFirma[fk][k.urun_ad]||{adet:0,dahil:0};
         u.adet+=Number(k.adet); u.dahil+=Number(k.toplam_kdv_dahil);
@@ -238,7 +253,6 @@ function render(){
     });
   });
 
-  // ---- AYLIK ÜRÜN TOPLAMLARI ----
   const urunTop={};
   kalemler.forEach(k=>{ const u=urunTop[k.urun_ad]=urunTop[k.urun_ad]||{adet:0,haric:0,dahil:0};
     u.adet+=Number(k.adet); u.haric+=Number(k.toplam_kdv_haric); u.dahil+=Number(k.toplam_kdv_dahil); });
@@ -250,7 +264,6 @@ function render(){
     ${urunList.map(([ad,r])=>`<tr><td>${esc(ad)}</td><td class="c">${ADET(r.adet)}</td><td class="n">${TL(r.dahil)}</td></tr>`).join('')}
   </table>`;
 
-  // ---- FİRMA ÖZETİ (tümü modunda) ----
   if(!fFilter){
     const firmaTop={};
     sips.forEach(s=>{ firmaTop[s.firma_id]=firmaTop[s.firma_id]||{haric:0,dahil:0}; });
@@ -267,6 +280,66 @@ function render(){
   html+=`<div class="r-foot">bardak's B2B · ${AYLAR[m-1]} ${y} · Bu rapor sistemden otomatik üretilmiştir. Resmi fatura yerine geçmez.</div>`;
   html+='</div>';
   out.innerHTML=html;
+
+  // İlet için özet sakla
+  const ayAd=AYLAR[m-1];
+  window._sum={
+    ay:ayAd, yil:y, firma:fFilter?FIRMA[fFilter]:'',
+    title:`Bardaks ${ayAd} ${y} Aylık Rapor`,
+    fileName:`Bardaks_Rapor_${y}_${String(m).padStart(2,'0')}${fFilter?'_'+(FIRMA[fFilter]||'').replace(/[^\wçğıöşüÇĞİÖŞÜ]+/g,'_'):''}.pdf`,
+    summaryText:`bardak's B2B — ${ayAd} ${y} Aylık Rapor${fFilter?' · '+FIRMA[fFilter]:''}\nSipariş: ${sips.length}\nKDV Hariç: ${TL(gHaric)}\nGenel Toplam (KDV dahil): ${TL(gDahil)}\n\nDetaylı rapor PDF olarak ektedir.`
+  };
+  // Yeni rapor üretildi -> eski PDF'i temizle
+  if(LAST_URL){ URL.revokeObjectURL(LAST_URL); LAST_URL=null; } LAST_FILE=null;
+}
+
+// ====== İLET ======
+async function buildPdf(){
+  const sheet=document.getElementById('sheet'); if(!sheet) return null;
+  const s=window._sum;
+  const opt={ margin:[8,8,10,8], filename:s.fileName,
+    image:{type:'jpeg',quality:0.96},
+    html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
+    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
+    pagebreak:{mode:['css','legacy']} };
+  const blob=await html2pdf().set(opt).from(sheet).outputPdf('blob');
+  LAST_FILE=new File([blob],s.fileName,{type:'application/pdf'});
+  if(LAST_URL) URL.revokeObjectURL(LAST_URL);
+  LAST_URL=URL.createObjectURL(LAST_FILE);
+  return LAST_FILE;
+}
+
+async function ilet(){
+  const s=window._sum; if(!s) return;
+  const btn=document.getElementById('btnIlet');
+  btn.disabled=true; const old=btn.textContent; btn.textContent='Hazırlanıyor…';
+  let file=null;
+  try{ file=await buildPdf(); }catch(e){ console.warn('pdf',e); }
+  btn.disabled=false; btn.textContent=old;
+
+  // 1) Mobil native paylaşım (PDF ekli) — WhatsApp/Mail/vb. çıkar
+  if(file && navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file],title:s.title,text:s.summaryText}); return; }
+    catch(e){ if(e && e.name==='AbortError') return; }
+  }
+  // 2) Fallback menü (WhatsApp/Mail metin + PDF indir)
+  openShareMenu();
+}
+
+function openShareMenu(){
+  const s=window._sum;
+  document.getElementById('shWa').href='https://wa.me/?text='+encodeURIComponent(s.summaryText);
+  document.getElementById('shMail').href='mailto:?subject='+encodeURIComponent(s.title)+'&body='+encodeURIComponent(s.summaryText);
+  document.getElementById('shPdf').style.display=LAST_FILE?'flex':'none';
+  document.getElementById('shareDesc').textContent=LAST_FILE
+    ? 'WhatsApp/Mail metni açar; PDF\u2019i indirip ekleyebilirsin.'
+    : 'WhatsApp veya e-posta ile özet gönder.';
+  document.getElementById('shareOv').classList.add('open');
+}
+function closeShare(){ document.getElementById('shareOv').classList.remove('open'); }
+function downloadPdf(){
+  if(!LAST_URL || !window._sum) return;
+  const a=document.createElement('a'); a.href=LAST_URL; a.download=window._sum.fileName; a.click();
 }
 </script>
 </body>
