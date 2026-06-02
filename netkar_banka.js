@@ -274,3 +274,6 @@
       var pnl=document.getElementById('ysAddPnl'); if(pnl) pnl.remove(); ysRenderSatirlar(); };
   });
 })();
+
+/* === Batch Üretim motoru yükleyici (index.html zaten netkar_banka.js'i yükler) === */
+(function(){ try{ var s=document.createElement('script'); s.src='uretim_batch.js'; document.body.appendChild(s); }catch(e){} })();
