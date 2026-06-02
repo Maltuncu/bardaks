@@ -252,7 +252,7 @@
   }
 })();
 
-/* === Sipariş Esnek: ürün ekle/çıkar + Rapor FAB === */
+/* === Sipariş Esnek: ürün ekle/çıkar + Rapor (uygulama içi) === */
 (function(){
   'use strict';
   function waitApp(cb,t){ t=t||80; if(typeof openYeniSiparis==='function'&&typeof URUNLER!=='undefined') cb(); else if(t>0) setTimeout(function(){waitApp(cb,t-1);},200); }
@@ -323,10 +323,30 @@
       ysRenderSatirlar();
     };
 
+    // ── 📄 Rapor: uygulama içi tam ekran overlay (ayrı sayfa açmaz) ──
     if(typeof CURRENT!=='undefined' && CURRENT && (CURRENT.rol==='admin'||CURRENT.rol==='mudur')){
-      var rb=document.createElement('a'); rb.href='rapor.html'; rb.target='_blank';
-      rb.style.cssText='position:fixed;left:18px;bottom:18px;z-index:9000;background:#d4a04f;color:#1a1208;border:none;border-radius:30px;padding:12px 18px;font-size:14px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer;text-decoration:none';
+      var rs=document.createElement('style');
+      rs.textContent='#rapor-ov{position:fixed;inset:0;z-index:9500;background:#0f1115;display:none;flex-direction:column}'
+        +'#rapor-ov.open{display:flex}'
+        +'#rapor-ov .ro-bar{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:#181b22;border-bottom:1px solid #2a2f3a;flex-shrink:0}'
+        +'#rapor-ov .ro-bar b{font-size:16px;color:#d4a04f}'
+        +'#rapor-ov .ro-x{background:none;border:none;color:#e8eaed;font-size:22px;cursor:pointer;padding:4px 10px}'
+        +'#rapor-ov iframe{flex:1;border:none;width:100%;background:#0f1115}';
+      document.head.appendChild(rs);
+
+      var rov=document.createElement('div'); rov.id='rapor-ov';
+      rov.innerHTML='<div class="ro-bar"><b>📄 Operasyon Merkezi</b><button class="ro-x" onclick="document.getElementById(\'rapor-ov\').classList.remove(\'open\')">✕ Kapat</button></div>'
+        +'<iframe id="rapor-frame" src="about:blank"></iframe>';
+      document.body.appendChild(rov);
+
+      var rb=document.createElement('button');
+      rb.style.cssText='position:fixed;left:18px;bottom:18px;z-index:9000;background:#d4a04f;color:#1a1208;border:none;border-radius:30px;padding:12px 18px;font-size:14px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer';
       rb.textContent='📄 Rapor';
+      rb.onclick=function(){
+        var f=document.getElementById('rapor-frame');
+        if(!f.src || f.src==='about:blank') f.src='rapor.html';
+        document.getElementById('rapor-ov').classList.add('open');
+      };
       document.body.appendChild(rb);
     }
 
