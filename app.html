@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Bardaks B2B</title>
+<style>*{margin:0;padding:0}html,body{height:100%;overflow:hidden}iframe{width:100%;height:100%;border:none}</style>
+</head>
+<body>
+<iframe id="app" src="index.html"></iframe>
+<script>
+// Cache-bust: companion JS'i iframe içindeki sayfaya zorla yeni versiyonla yükle
+var frame = document.getElementById('app');
+frame.onload = function(){
+  try {
+    var doc = frame.contentDocument || frame.contentWindow.document;
+    // Eski netkar_banka.js script tag'ını bul ve kaldır
+    var old = doc.querySelector('script[src="netkar_banka.js"]');
+    if(old) old.remove();
+    // Yeni versiyonu cache-bust ile yükle
+    var s = doc.createElement('script');
+    s.src = 'netkar_banka.js?v=' + Date.now();
+    doc.body.appendChild(s);
+  } catch(e) {
+    console.warn('Cache-bust:', e);
+  }
+};
+</script>
+</body>
+</html>
