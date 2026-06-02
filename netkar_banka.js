@@ -158,8 +158,7 @@
   window.NB={ close:close, tab:render, ek:ek, saveEk:saveEk, delEk:delEk, addHesap:addHesap, addHar:addHar };
 })();
 
-/* === Auth UX katmanı (companion): mail hatirla + sifremi unuttum + recovery ===
-   index.html'e dokunmaz; sb global'ini kullanir. Login ekraninda calisir. */
+/* === Auth UX katmanı (companion): mail hatirla + sifremi unuttum + recovery === */
 (function(){
   'use strict';
   function $(id){ return document.getElementById(id); }
@@ -252,7 +251,7 @@
   }
 })();
 
-/* === Sipariş Esnek: ürün ekle/çıkar + Rapor (uygulama içi) === */
+/* === Sipariş Esnek + Firma Yönetim Overlay === */
 (function(){
   'use strict';
   function waitApp(cb,t){ t=t||80; if(typeof openYeniSiparis==='function'&&typeof URUNLER!=='undefined') cb(); else if(t>0) setTimeout(function(){waitApp(cb,t-1);},200); }
@@ -323,7 +322,7 @@
       ysRenderSatirlar();
     };
 
-    // ── 📄 Rapor: uygulama içi tam ekran overlay (ayrı sayfa açmaz) ──
+    // ── Firma Yönetim: uygulama içi tam ekran overlay ──
     if(typeof CURRENT!=='undefined' && CURRENT && (CURRENT.rol==='admin'||CURRENT.rol==='mudur')){
       var rs=document.createElement('style');
       rs.textContent='#rapor-ov{position:fixed;inset:0;z-index:9500;background:#0f1115;display:none;flex-direction:column}'
@@ -335,16 +334,16 @@
       document.head.appendChild(rs);
 
       var rov=document.createElement('div'); rov.id='rapor-ov';
-      rov.innerHTML='<div class="ro-bar"><b>📄 Operasyon Merkezi</b><button class="ro-x" onclick="document.getElementById(\'rapor-ov\').classList.remove(\'open\')">✕ Kapat</button></div>'
+      rov.innerHTML='<div class="ro-bar"><b>📄 Firma Yönetim</b><button class="ro-x" onclick="document.getElementById(\'rapor-ov\').classList.remove(\'open\')">✕ Kapat</button></div>'
         +'<iframe id="rapor-frame" src="about:blank"></iframe>';
       document.body.appendChild(rov);
 
       var rb=document.createElement('button');
       rb.style.cssText='position:fixed;left:18px;bottom:18px;z-index:9000;background:#d4a04f;color:#1a1208;border:none;border-radius:30px;padding:12px 18px;font-size:14px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer';
-      rb.textContent='📄 Rapor';
+      rb.textContent='📄 Firma Yönetim';
       rb.onclick=function(){
         var f=document.getElementById('rapor-frame');
-        if(!f.src || f.src==='about:blank') f.src='rapor.html';
+        if(!f.src || f.src==='about:blank') f.src='firma_takvim.html';
         document.getElementById('rapor-ov').classList.add('open');
       };
       document.body.appendChild(rb);
