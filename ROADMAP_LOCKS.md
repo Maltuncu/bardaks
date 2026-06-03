@@ -11,7 +11,7 @@
 | **PRE-4B.5R** (UTL loader + diagnostics) | 🔴 **OPEN** | Canlı browser'da runtime proof alınana kadar açık |
 | **4B.5B1** (gerçek realtime konsolidasyon) | ⛔ **NOT ALLOWED** | PRE-4B.5R kapanmadan başlanamaz |
 
-**Kural:** PRE-4B.5R blocker, GitHub Pages canlı runtime'da aşağıdaki kontroller `yes` dönene kadar **kapalı** sayılır. Runtime proof yoksa "verified" denmez.
+**Kural:** PRE-4B.5R blocker, GitHub Pages canlı runtime'da aşağıdaki kontroller `yes` dönene kadar **açık** sayılır (**closed sayılmaz**). Runtime proof yoksa "verified" denmez.
 
 ### PRE-4B.5R runtime acceptance (login sonrası, `?v=2b5fe18`)
 
@@ -74,12 +74,80 @@ Konsolidasyon sonrası hedef: index runtime'da **2 kanal → 1**, siparisler iç
 | PRE-4B.5R loader fix | `uretim_batch.js` UTL-first loader | `57b2956` |
 | PRE-4B.5R guard | `utl.js` `__UTL_LOADED` | `a778c04` |
 | PRE-4B.5R2 sync | `index_bridge.js`: RT_AUDIT canlıya + error semantics ayrıştırma | `2b5fe18` |
+| ROADMAP_LOCKS ilk | Kapı/dosya/faz kilitleri | `4cd9c5f` |
 
 **Error semantics (4B.5R2):** `UTL_MISSING` yalnız UTL/UTL.mutate yoksa · `SB_MISSING` · `BRIDGE_FN_MISSING` · `CURRENT_MISSING` · `AUTH_PENDING` (login beklerken, kalıcı fail değil, CURRENT gelince install).
 
 ---
 
-## 5. ÜRÜN ROADMAP (uzun vade — MİMARİ_ANALİZ_v1)
+## 5. PHASE 4F — MANUAL FINANCIAL CUTOVER 🔒
+
+**İş kararı:** Excel/snapshot import verileri yanlış çekilmiş olabilir. Bu nedenle import edilmiş firma değerleri, tahsilatlar, giderler, bakiyeler ve finansal toplamlar **otomatik financial truth kabul edilmez**.
+
+**Kurallar (lock):**
+
+- Legacy/import veri **silinmez**, ama **unverified** kabul edilir.
+- Financial truth = **manuel doğrulanmış** veri.
+- Sistem aktif kullanıma geçmeden önce firma bakiyeleri, alınan ödemeler, giderler ve aktif siparişler **admin/müdür tarafından elle doğrulanacak**.
+- **"Financial truth ready"** ancak manual cutover tamamlanınca denebilir.
+- Rapor / firma_takvim / index finansal toplamlarında legacy unverified veri ile verified financial data **karışmayacak**.
+- Financial parity raporlarında Excel/import verisi **verified kabul edilmeyecek**.
+
+**Önerilen (ileride uygulanacak — bu turda schema DEĞİŞMEDİ) alanlar:**
+
+- `source`: `legacy_import` / `manual` / `system`
+- `verified`: `true` / `false`
+- `verified_by`
+- `verified_at`
+
+**Cutover checklist:**
+
+1. Firma listesi doğrulandı.
+2. Her firma için açılış bakiyesi girildi veya sıfırlandı.
+3. Alınan ödemeler manuel girildi.
+4. Giderler manuel girildi.
+5. Aktif siparişler doğrulandı.
+6. Rapor / firma_takvim / index aynı finansal sonucu gösteriyor.
+7. Legacy/import veri financial truth'tan ayrıldı.
+8. Admin/müdür onayı verildi.
+9. Sistem aktif kullanım moduna alındı.
+
+---
+
+## 6. PHASE UX — PROFESSIONAL UI AUDIT & REDESIGN 🔒
+
+**Ürün hedefi:** İç sistem profesyonel, sade, rahat kullanılabilir bir B2B operasyon paneli olacak.
+
+**Kurallar (lock):**
+
+- Bu faz, realtime/mutation stabilitesi ve financial cutover planı **netleşmeden büyük rewrite olarak başlamaz**.
+- İç panel: **yoğun ama ferah** operasyon merkezi.
+- İmalathane ekranı: **mobil, hızlı, çok sade**.
+- Admin/müdür ekranı: **detaylı ama düzenli ve taranabilir**.
+- Butonlar, sekmeler, durum renkleri ve aksiyonlar **standardize** edilecek.
+- Gereksiz hero/landing/gradient/orb **YOK**.
+- Kart içinde kart **YOK**.
+- Alert yerine **kontrollü banner/toast/state** katmanı.
+- Yerel Excel hissi değil, **profesyonel B2B SaaS/operasyon paneli** hissi.
+- Tasarım değişiklikleri **veri doğruluğu ve runtime stabilitesi bozulmadan küçük fazlarla**.
+
+---
+
+## 7. PHASE CUSTOMER PORTAL — INVITE-ONLY FIRM PORTAL 🔒
+
+**İş hedefi:** Firmalara link verilip kendi siparişlerini sistemden geçmeleri uzun vadeli doğru hedeftir; ama iç sistem **single-truth + financial cutover + security** tamamlanmadan **açılmayacak**.
+
+**Kurallar (lock):**
+
+- İlk sürüm **herkese açık kayıt YOK** — **davetli** firma portalı.
+- Firma kullanıcıları **sadece kendi `firma_id`** verisini görebilecek (**RLS/security şart**).
+- Firma: sipariş oluşturabilecek; eski siparişten **tekrar sipariş** verebilecek; **sipariş durumu** takip edebilecek; **dosya/not** ekleyebilecek.
+- **Ödeme/bakiye görünümü** ancak **verified financial data** (PHASE 4F) tamamlandıktan sonra açılacak.
+- Şimdilik **implementation YOK** — sadece roadmap lock.
+
+---
+
+## 8. ÜRÜN ROADMAP (uzun vade — MİMARİ_ANALİZ_v1)
 
 Sıra kilidi: **paranın gerçeği → disiplin/kontrol → ölçek/zeka.**
 
@@ -93,7 +161,14 @@ Sıra kilidi: **paranın gerçeği → disiplin/kontrol → ölçek/zeka.**
 
 ---
 
-## 6. AÇIK FOLLOW-UP'LAR
+## 9. GLOBAL LOCKS & AÇIK FOLLOW-UP'LAR
+
+- 🔴 **Runtime proof kapanmadan 4B.5B1 YOK.**
+- 🔴 **Manual financial cutover (PHASE 4F) tamamlanmadan "financial truth ready" YOK.**
+- 🔴 **UX redesign (PHASE UX) büyük rewrite olarak başlamayacak** — küçük fazlar, stabilite korunarak.
+- 🔴 **Customer portal (PHASE 7) implementation, security/RLS + verified financial data olmadan başlamayacak.**
+
+Açık işler:
 
 - **Runtime proof** (PRE-4B.5R) — browser connector bağlanınca veya kullanıcı manuel; bu kapanmadan 4B.5B1 yok.
 - **RT_AUDIT telemetry yorumu** — login sonrası `durumDegistir/durumIlerlet` ile `duplicateWindowHits` ölçümü (D1/D2 kanıtı).
