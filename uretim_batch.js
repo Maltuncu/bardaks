@@ -316,3 +316,6 @@
   /* ---------- public ---------- */
   window.UB={ close:close, toggle:toggle, selGroup:selGroup, clearSel:clearSel, run:run };
 })();
+
+/* === index_bridge.js yükleyici (Phase 4B.1) === */
+(function(){ try{ if(document.querySelector('script[data-ib]')) return; var s=document.createElement('script'); s.src='index_bridge.js'; s.setAttribute('data-ib','1'); document.body.appendChild(s); }catch(e){} })();
