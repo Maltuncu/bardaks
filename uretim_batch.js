@@ -320,7 +320,7 @@
 /* === UTL + index_bridge.js yükleyici (PRE-4B.5R: utl.js index_bridge'den ÖNCE) ===
    index.html runtime'da window.UTL yoktu -> index_bridge override'ları kurulamıyordu (UTL_MISSING).
    Fix: index_bridge.js'i ancak utl.js yüklendikten SONRA enjekte et. Sıra garanti, double-load guard'lı.
-   4B.5B1A cache-bust: index_bridge.js?v=... ile per-client browser-cache non-determinism giderildi.
+   4B.5B1A cache-bust: index_bridge.js?v=… ile per-client browser-cache non-determinism giderildi.
    utl.js client() mevcut sayfa 'sb'sini paylaşır (auth/RLS regresyonu yok). rapor.html bu yoldan etkilenmez. */
 (function(){
   try{
@@ -339,3 +339,6 @@
     try{ if(!document.querySelector('script[data-ib]')){ var b=document.createElement('script'); b.src='index_bridge.js?v=4B.5B1A-25d00de'; b.setAttribute('data-ib','1'); document.body.appendChild(b); } }catch(e2){}
   }
 })();
+
+/* === finguard.js (4F.0) yükleyici — legacy/import firma bakiye/alacak UI redaksiyonu === */
+(function(){ try{ if(document.querySelector('script[data-fg]')) return; var s=document.createElement('script'); s.src='finguard.js?v=4F.0-001'; s.setAttribute('data-fg','1'); document.body.appendChild(s); }catch(e){} })();
