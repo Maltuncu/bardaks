@@ -1,61 +1,91 @@
-/* Bardaks UX-1 companion visual polish (CSS-only, reversible).
-   index.html unchanged. No function/flow/render/mutation/color-semantics change.
-   Only: typography consistency, neutral background, card/button/badge/table polish.
-   Semantic inline colors (var(--red)/var(--green) etc.) and finguard redaction view
-   ("—" / "Finansal dogrulama bekliyor") PRESERVED — inline styles win. */
+/* Bardaks UX-1B — calm/professional refinement (CSS-only, reversible).
+   index.html unchanged. No JS/data/render/mutation change. Finguard redaction preserved.
+   Direction: Apple-like calm clarity + restrained Bardaks brand accent (logo blue) + dense B2B usability.
+   Semantic status colors (red/green) kept clear; brand color used ONLY as restrained accent. */
 
-/* 1) Typography: consistent modern sans-serif across surface (kill root serif default) */
+:root{
+  --ux-brand:#1e5ba8;     /* Bardaks logo accent */
+  --ux-bg:#eef1f5;        /* neutral calm panel */
+  --ux-surface:#ffffff;
+  --ux-border:#e2e6ec;
+  --ux-muted:#6b7b8f;
+  --ux-ink:#1a2b40;
+}
+
+/* ---- Typography + base (consistent modern sans-serif, calm neutral bg) ---- */
 html, body, button, input, select, textarea, .nav-item, .card, table {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
 }
-body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body { background: var(--ux-bg) !important; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 
-/* 2) Background: cream -> neutral clean ops panel */
-body { background: #eef1f5 !important; }
-
-/* 3) Cards: tidy radius (max 8) + soft shadow + neutral default border.
-   Warning cards' inline border-color:var(--red) etc. PRESERVED (inline wins). */
-.card {
-  border-radius: 8px !important;
-  box-shadow: 0 1px 2px rgba(16,32,56,.06), 0 1px 3px rgba(16,32,56,.05) !important;
-  border: 1px solid #dfe4ea;
-  background: #ffffff;
+/* ---- Cards: calm surface, soft shadow, tidy radius ---- */
+.card{
+  border-radius: 10px !important;
+  background: var(--ux-surface);
+  border: 1px solid var(--ux-border);
+  box-shadow: 0 1px 2px rgba(16,32,56,.05) !important;
 }
 
-/* 4) Buttons: consistent height/radius + hover/focus (no text/function change) */
-.btn {
-  border-radius: 8px !important;
-  min-height: 38px;
-  transition: filter .12s ease, box-shadow .12s ease;
+/* Section/card titles: calmer + muted -> reduces emoji visual dominance (no text removed) */
+.card-title{
+  font-size: 13px !important; font-weight: 600 !important; letter-spacing: .2px;
+  color: #33445c !important;
 }
-.btn:hover { filter: brightness(.96); }
-.btn:focus-visible { outline: 2px solid #1e5ba8; outline-offset: 2px; }
-.btn-sm { min-height: 30px; }
+.page-title{ font-weight: 650; letter-spacing: -.2px; }
+.page-desc{ color: var(--ux-muted) !important; }
 
-/* 5) Nav: breathing room; visible badges separated */
-.nav-item { gap: 4px; }
-.nav-ico { margin-right: 2px; }
-.badge, .nav-badge {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 16px; height: 16px; padding: 0 4px; margin-left: 4px;
-  border-radius: 999px; font-size: 10px; line-height: 1;
-  background: #c0392b; color: #fff; font-weight: 700;
+/* Calm warning cards: red only as LEFT accent + neutral border + white bg (no big red surface).
+   Inline red title/icon stays as semantic emphasis. */
+.card[style*="--red"]{
+  border-color: var(--ux-border) !important;
+  border-left: 3px solid #c0392b !important;
+  background: #ffffff !important;
 }
-.badge.hidden, .nav-badge.hidden { display: none !important; }
 
-/* 6) Tables: numeric readability + aligned spacing */
-.card table { border-collapse: collapse; width: 100%; }
-.card table td, .card table th { padding: 7px 8px; }
-.card table td[style*="text-align:right"], .card table th[style*="text-align:right"] {
+/* ---- Metric / stat cards: readable hierarchy ---- */
+.stat{ border-radius: 10px; background: var(--ux-surface); border: 1px solid var(--ux-border); }
+.stat-label{ color: var(--ux-muted) !important; font-size: 12px; letter-spacing: .2px; }
+.stat-value{ letter-spacing: -.3px; font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+/* ---- Buttons: brand-primary restrained, secondary neutral ---- */
+.btn{ border-radius: 8px !important; min-height: 38px; font-weight: 600; transition: filter .12s ease, box-shadow .12s ease; }
+.btn:hover{ filter: brightness(.97); }
+.btn:focus-visible{ outline: 2px solid var(--ux-brand); outline-offset: 2px; }
+.btn-sec{ background: #f1f4f8 !important; color: #33445c !important; border: 1px solid var(--ux-border) !important; }
+.btn-sm{ min-height: 30px; }
+
+/* ---- Tables: numeric readability + calm header ---- */
+.card table{ border-collapse: collapse; width: 100%; }
+.card table td, .card table th{ padding: 7px 9px; }
+.card table th{ color: var(--ux-muted); font-weight: 600; }
+.card table td[style*="text-align:right"], .card table th[style*="text-align:right"]{
   font-variant-numeric: tabular-nums; font-feature-settings: "tnum";
 }
 
-/* 7) Stat boxes: radius harmony */
-.stat { border-radius: 8px; }
+/* ---- Bottom nav: professional spacing + clear brand-accent active state ---- */
+.nav-item{ gap: 3px; color: var(--ux-muted); padding: 6px 4px; font-size: 11px; font-weight: 500; }
+.nav-item .nav-ico{ font-size: 18px; line-height: 1; opacity: .8; }
+.nav-item.active{ color: var(--ux-brand) !important; font-weight: 600; }
+.nav-item.active .nav-ico{ opacity: 1; }
+.nav-item.active::after{ content: ""; display: block; height: 2px; width: 18px; margin: 3px auto 0; border-radius: 2px; background: var(--ux-brand); }
 
-/* 8) Mobile: small safe improvements (scroll wide tables, prevent overflow) */
-@media (max-width: 560px) {
-  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .card { padding: 13px !important; }
-  .stats { gap: 8px; }
+/* ---- Badges: small, restrained (semantic red kept) ---- */
+.badge, .nav-badge{
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 16px; padding: 0 4px; margin-left: 4px;
+  border-radius: 999px; font-size: 10px; line-height: 1; font-weight: 700;
+  background: #c0392b; color: #fff;
+}
+.badge.hidden, .nav-badge.hidden{ display: none !important; }
+
+/* ---- Selected state accent (brand) ---- */
+.ub-row.sel{ border-color: var(--ux-brand) !important; }
+
+/* ---- Mobile: small safe improvements ---- */
+@media (max-width: 560px){
+  .table-wrap{ overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .card{ padding: 13px !important; }
+  .stats{ gap: 8px; }
+  .nav-item{ font-size: 10px; }
+  .nav-item .nav-ico{ font-size: 17px; }
 }
