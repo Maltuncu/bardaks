@@ -3,310 +3,225 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Bardaks B2B — Operasyon Merkezi</title>
+<title>Bardaks B2B — Operasyon Raporu (UTL)</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
-<script src="gunluk_meta.js"></script><script src="gunluk_ord1.js"></script><script src="gunluk_ord2.js"></script><script src="gunluk_ord3.js"></script>
+<script src="utl.js"></script>
 <style>
 :root{--bg:#0f1115;--s:#181b22;--s2:#1f232c;--bd:#2a2f3a;--tx:#e8eaed;--dm:#9aa0ac;--ac:#d4a04f;--gn:#4caf7d;--rd:#e05c5c;--r:12px}
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+*{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx);font-size:15px;line-height:1.5}
 .top{position:sticky;top:0;z-index:30;background:var(--s);border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;padding:12px 16px;flex-wrap:wrap;gap:8px}
 .logo{font-size:18px;font-weight:800;color:var(--ac)} .logo span{color:var(--tx)}
 .w{max-width:1100px;margin:0 auto;padding:16px}
-.ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;background:var(--s);border:1px solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:4px}
+.ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;background:var(--s);border:1px solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:10px}
 .ctl .f{display:flex;flex-direction:column;gap:4px} .ctl label{font-size:12px;color:var(--dm)}
-select,input[type=date]{background:var(--s2);border:1px solid var(--bd);border-radius:9px;padding:10px 12px;color:var(--tx);font-size:15px;font-family:inherit;min-width:100px}
+select,input[type=date],input{background:var(--s2);border:1px solid var(--bd);border-radius:9px;padding:10px 12px;color:var(--tx);font-size:15px;font-family:inherit;min-width:100px}
 select:focus,input:focus{outline:none;border-color:var(--ac)}
 .b{background:var(--ac);color:#1a1208;border:none;font-weight:700;padding:11px 16px;border-radius:9px;cursor:pointer;font-size:14px}
-.b.s{background:var(--s2);color:var(--tx);border:1px solid var(--bd)} .b:disabled{opacity:.6}
-.tabs{display:flex;gap:0;background:var(--s);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;margin-bottom:14px}
-.tab{flex:1;padding:12px 8px;text-align:center;cursor:pointer;font-weight:700;font-size:13px;color:var(--dm);border-right:1px solid var(--bd);transition:background .15s}
+.b.s{background:var(--s2);color:var(--tx);border:1px solid var(--bd)}
+.tabs{display:flex;background:var(--s);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;margin-bottom:14px}
+.tab{flex:1;padding:12px 8px;text-align:center;cursor:pointer;font-weight:700;font-size:13px;color:var(--dm);border-right:1px solid var(--bd)}
 .tab:last-child{border-right:none} .tab.on{background:var(--ac);color:#1a1208}
-.ok{background:#1c3a2a;border:1px solid var(--gn);color:#bff0d6;border-radius:8px;padding:6px 10px;font-size:12px;display:inline-block;margin-bottom:10px}
-.warn{background:#3a1c1c;border:1px solid var(--rd);color:#ffcaca;border-radius:10px;padding:12px;margin-bottom:10px;font-size:13px}
-/* Rapor kağıdı */
+.state{border-radius:10px;padding:9px 13px;margin-bottom:12px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+.state.processing{background:#1c2a3a;border:1px solid #2f5b8a;color:#bcd6f0}
+.state.confirmed{background:#13241b;border:1px solid var(--gn);color:#bff0d6}
+.state.unknown{background:#3a2f1c;border:1px solid var(--ac);color:#ffe6b0}
+.state.failed{background:#3a1c1c;border:1px solid var(--rd);color:#ffcaca}
+.state.hide{display:none}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.empty{padding:40px;text-align:center;color:var(--dm)}
+.an-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-bottom:16px}
+.an-card{background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:14px}
+.an-card .v{font-size:22px;font-weight:800;color:var(--ac)} .an-card .l{font-size:12px;color:var(--dm)}
+.an-card .v.gn{color:var(--gn)} .an-card .v.rd{color:var(--rd)}
 #sh{background:#fff;color:#1a1a1a;border-radius:10px;padding:24px;box-shadow:0 6px 30px rgba(0,0,0,.4)}
-#sh .rh{display:flex;justify-content:space-between;border-bottom:3px solid #1a1a1a;padding-bottom:10px;margin-bottom:6px}
-#sh .rl{font-size:22px;font-weight:800} #sh .rs{font-size:11px;color:#666}
-#sh .rf{font-size:11px;text-align:right;color:#333}
+#sh .rh{display:flex;justify-content:space-between;border-bottom:3px solid #1a1a1a;padding-bottom:10px;margin-bottom:8px}
+#sh .rl{font-size:22px;font-weight:800} #sh .rs{font-size:11px;color:#666} #sh .rf{font-size:11px;text-align:right;color:#333}
 #sh h2{font-size:18px;margin:10px 0 2px} #sh .rm{font-size:12px;color:#666;margin-bottom:12px}
-#sh .fh{font-size:15px;font-weight:800;margin:18px 0 4px}
-#sh .wk{font-size:13px;font-weight:800;color:#fff;background:#3f8f63;padding:7px 12px;margin:12px 0 0;border-radius:5px 5px 0 0}
-.gw{overflow-x:auto;border:1px solid #cfe3d6;border-top:none;border-radius:0 0 5px 5px;margin-bottom:6px}
-#sh table.g{border-collapse:collapse;font-size:11.5px;white-space:nowrap;min-width:100%}
-#sh table.g th,#sh table.g td{border:1px solid #d8e6dd;padding:5px 8px;text-align:center}
-#sh table.g th{background:#eaf4ee;font-weight:700;font-size:10.5px}
-#sh table.g td.u{text-align:left;font-weight:600;position:sticky;left:0;background:#fff}
-#sh table.g th.u{text-align:left;position:sticky;left:0;background:#eaf4ee;z-index:1}
-#sh table.g td.bf{color:#2c6e49;font-weight:600} #sh table.g td.n{text-align:right}
-#sh table.g td.t,#sh table.g th.t{background:#f6f1e6;font-weight:700}
-#sh table.g tr.gl td{background:#f3efe4;font-weight:700}
-#sh table.g tr.hl td{background:#d4a04f;color:#1a1208;font-weight:800;font-size:12px}
-#sh .st{font-size:15px;font-weight:800;margin:22px 0 8px;border-bottom:2px solid #1a1a1a;padding-bottom:4px}
+#sh .st{font-size:15px;font-weight:800;margin:18px 0 8px;border-bottom:2px solid #1a1a1a;padding-bottom:4px}
 #sh table.sm{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:4px}
 #sh table.sm th{background:#f3f3f3;text-align:left;padding:6px 9px;border:1px solid #ddd;font-size:11px}
 #sh table.sm td{padding:6px 9px;border:1px solid #e2e2e2} #sh table.sm td.n,#sh table.sm th.n{text-align:right}
 #sh table.sm tr.tr td{font-weight:700;background:#faf7f0}
 #sh .gr{font-size:16px;font-weight:800;text-align:right;margin-top:10px;border-top:2px solid #1a1a1a;padding-top:8px}
 #sh .ft{margin-top:20px;font-size:10px;color:#888;text-align:center;border-top:1px solid #ddd;padding-top:8px}
-/* günlük detay */
-.day-card{background:#fff;border-radius:10px;padding:18px;margin-bottom:10px;box-shadow:0 3px 14px rgba(0,0,0,.3)}
-.day-card h3{font-size:16px;margin-bottom:8px;color:#1a1a1a}
-.day-card table{width:100%;border-collapse:collapse;font-size:13px;color:#1a1a1a}
+.day-card{background:#fff;color:#1a1a1a;border-radius:10px;padding:16px;margin-bottom:10px}
+.day-card h3{font-size:15px;margin-bottom:8px} .day-card table{width:100%;border-collapse:collapse;font-size:13px}
 .day-card th{background:#f3f3f3;text-align:left;padding:6px 9px;border:1px solid #ddd;font-size:11px}
-.day-card td{padding:6px 9px;border:1px solid #e2e2e2} .day-card td.n{text-align:right}
-.day-card .tot{font-weight:700;background:#faf7f0}
-/* analitik */
-.an-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:16px}
-.an-card{background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:14px}
-.an-card .v{font-size:22px;font-weight:800;color:var(--ac)} .an-card .l{font-size:12px;color:var(--dm)}
-/* fatura */
+.day-card td{padding:6px 9px;border:1px solid #e2e2e2} .day-card td.n{text-align:right} .day-card tr.tot td{font-weight:700;background:#faf7f0}
 .fat-row{display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;margin-bottom:6px}
-.fat-row .fname{font-weight:700} .fat-row .fstat{font-size:13px}
 .tag-g{color:var(--gn)} .tag-r{color:var(--rd)} .tag-y{color:#f59e0b}
-/* share */
-#sov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:60;display:none;align-items:center;justify-content:center;padding:20px}
-#sov.open{display:flex}
-#scard{background:var(--s);border:1px solid var(--bd);border-radius:14px;padding:18px;width:100%;max-width:340px}
-.sb{display:flex;align-items:center;gap:10px;width:100%;padding:13px;border-radius:10px;border:1px solid var(--bd);background:var(--s2);color:var(--tx);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;text-align:left;text-decoration:none}
-.sb:hover{border-color:var(--ac)}
 .login-box{max-width:340px;margin:60px auto;background:var(--s);border:1px solid var(--bd);border-radius:var(--r);padding:24px}
-.login-box h2{font-size:18px;margin-bottom:6px} .login-box p{color:var(--dm);font-size:13px;margin-bottom:14px}
-.login-box label{display:block;font-size:13px;color:var(--dm);margin:8px 0 4px}
-.login-box input{width:100%;padding:10px;border-radius:9px;border:1px solid var(--bd);background:var(--s2);color:var(--tx);font-size:15px;box-sizing:border-box}
-@media print{body{background:#fff}.top,.ctl,.tabs,.no-p,#sov{display:none!important}.w{max-width:none;padding:0}#sh{box-shadow:none;border-radius:0;padding:0}.gw{overflow:visible}}
+.login-box h2{font-size:18px;margin-bottom:6px} .login-box label{display:block;font-size:13px;color:var(--dm);margin:8px 0 4px}
+@media print{body{background:#fff}.top,.ctl,.tabs,.state,.no-p{display:none!important}.w{max-width:none;padding:0}#sh{box-shadow:none;border-radius:0;padding:0}}
 </style>
 </head>
 <body>
 <div class="top">
-  <div class="logo">bardak's<span> B2B · Operasyon Merkezi</span></div>
+  <div class="logo">bardak's<span> B2B · Operasyon Raporu</span></div>
   <div id="who" style="font-size:13px;color:var(--dm)"></div>
 </div>
+
 <div id="loginBox" class="login-box" style="display:none">
-  <h2>Giriş</h2><p>Fatura takibi için panel hesabınla giriş yap.</p>
+  <h2>Giriş</h2>
   <label>E-posta</label><input type="email" id="em">
   <label>Şifre</label><input type="password" id="pw" onkeydown="if(event.key==='Enter')doLogin()">
   <button class="b" style="width:100%;margin-top:14px" onclick="doLogin()">Giriş Yap</button>
-  <div id="le" style="font-size:13px;margin-top:8px"></div>
+  <div id="le" style="font-size:13px;margin-top:8px;color:var(--rd)"></div>
 </div>
+
 <div id="app" class="w" style="display:none">
   <div class="ctl no-p">
     <div class="f"><label>Yıl</label><select id="sY" onchange="onY()"></select></div>
     <div class="f"><label>Ay</label><select id="sM" onchange="go()"></select></div>
     <div class="f" style="flex:1"><label>Firma</label><select id="sF" onchange="go()"></select></div>
-    <button class="b" id="bI" onclick="ilet()">📤 İlet</button>
-    <button class="b s" onclick="window.print()">🖨</button>
+    <button class="b s" onclick="window.print()">🖨 Yazdır</button>
+    <button class="b" onclick="dlpdf()">📄 PDF</button>
   </div>
   <div class="tabs no-p">
-    <div class="tab on" onclick="setTab('tablo')">📊 Aylık Tablo</div>
-    <div class="tab" onclick="setTab('gunluk')">📅 Günlük</div>
-    <div class="tab" onclick="setTab('ozet')">📈 Özet & Analitik</div>
-    <div class="tab" onclick="setTab('fatura')">📄 Fatura</div>
+    <div class="tab on" data-t="ozet" onclick="setTab('ozet')">📈 Özet</div>
+    <div class="tab" data-t="urun" onclick="setTab('urun')">🍰 Ürün</div>
+    <div class="tab" data-t="gunluk" onclick="setTab('gunluk')">📅 Günlük</div>
+    <div class="tab" data-t="fatura" onclick="setTab('fatura')">📄 Fatura</div>
   </div>
-  <div id="wb"></div>
+  <div id="stateBar" class="state hide no-p"><span class="dot"></span><span id="stateMsg"></span></div>
   <div id="out"></div>
 </div>
-<div id="sov" onclick="if(event.target===this)csov()">
-  <div id="scard"><h3>📤 Raporu İlet</h3><p>WhatsApp veya e-posta ile gönder.</p>
-    <a class="sb" id="swa" target="_blank" rel="noopener">🟢 WhatsApp</a>
-    <a class="sb" id="sml">✉️ E-posta</a>
-    <button class="sb" id="spf" onclick="dlpdf()">📄 PDF indir</button>
-    <button class="sb" onclick="csov()" style="justify-content:center;background:none">Kapat</button>
-  </div>
-</div>
+
 <script>
-const SU='https://kfpgqqjmkutjzdmzkwaa.supabase.co',SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtmcGdxcWpta3V0anpkbXprd2FhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTk2NzcsImV4cCI6MjA5NTE5NTY3N30.Y1ov7w7eDIJfzHYFeWPuU3D8fVMj3uMhXHB18y7Nfbs';
-const sb=supabase.createClient(SU,SK);
 const AY=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
-const GN=['Paz','Pzt','Sal','Çar','Per','Cum','Cmt'];
-const FN={G:'Greenwich',A:'Alamare',D:'Dobos Lounge',M:'Mak Grup',L:'Levent Börek',C:'Coffee Neron',O:'Outlier Speciality Coffee'};
 const TL=n=>(Math.round((+n||0)*100)/100).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' ₺';
 const AD=n=>(+n||0).toLocaleString('tr-TR');
-const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const O=window.ORD||[],P=window.PROD||[],EX=window.EXP||{};
-let LF=null,LU=null,curTab='tablo',dbSip=null;
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $=id=>document.getElementById(id);
+const SUPABASE_URL='https://kfpgqqjmkutjzdmzkwaa.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtmcGdxcWpta3V0anpkbXprd2FhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTk2NzcsImV4cCI6MjA5NTE5NTY3N30.Y1ov7w7eDIJfzHYFeWPuU3D8fVMj3uMhXHB18y7Nfbs';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY); // yalnız auth için; veri erişimi UTL üzerinden
 
-// --- Auth ---
-(async()=>{const{data:{session}}=await sb.auth.getSession();if(session)start();else{document.getElementById('loginBox').style.display='block';document.getElementById('app').style.display='none';}
-sb.auth.onAuthStateChange((e,s)=>{if(s&&document.getElementById('app').style.display==='none')start();});})();
-async function doLogin(){const e=document.getElementById('em').value.trim(),p=document.getElementById('pw').value,l=document.getElementById('le');
-l.style.color='var(--dm)';l.textContent='Giriş yapılıyor…';const{error}=await sb.auth.signInWithPassword({email:e,password:p});
-if(error){l.style.color='var(--rd)';l.textContent=error.message;return;}start();}
-async function start(){document.getElementById('loginBox').style.display='none';document.getElementById('app').style.display='block';
-const{data:{user}}=await sb.auth.getUser();document.getElementById('who').textContent=user?user.email:'';
-integrity();buildSel();go();loadDbSip();}
+let curTab='ozet', FIRMS=[], PERIODS={};
 
-// --- DB sipariş (fatura tab) ---
-async function loadDbSip(){try{const r=await sb.from('siparisler').select('id,firma_id,tarih,siparis_no,fatura_durumu,fatura_no,fatura_kesim_tarihi,toplam_kdv_haric,toplam_kdv_dahil').eq('is_deleted',false).limit(5000);dbSip=r.data||[];}catch(e){dbSip=[];}}
+/* ---- state contract: processing | confirmed | unknown | failed ---- */
+function setState(kind,msg){ var b=$('stateBar'); if(!b) return; b.className='state no-p '+kind; $('stateMsg').textContent=msg; }
+function clearState(){ var b=$('stateBar'); if(b) b.className='state hide no-p'; }
 
-// --- Integrity ---
-function integrity(){const c={};O.forEach(o=>{const k=o[0]+'|'+o[1].slice(0,7);o[2].forEach(i=>{c[k]=(c[k]||0)+i[1]*i[2];});});
-const b=[];Object.keys(EX).forEach(k=>{if(Math.abs((c[k]||0)-EX[k])>0.6)b.push(k);});
-document.getElementById('wb').innerHTML=b.length?'<div class="warn">⚠ Veri tutarsızlığı: '+b.join(', ')+'</div>':'<div class="ok">✓ '+O.length+' günlük sipariş doğrulandı</div>';}
+/* ---- auth ---- */
+(async()=>{ const{data:{session}}=await sb.auth.getSession(); if(session) start(); else $('loginBox').style.display='block';
+  sb.auth.onAuthStateChange((e,s)=>{ if(s&&$('app').style.display==='none') start(); }); })();
+async function doLogin(){ const e=$('em').value.trim(),p=$('pw').value,l=$('le'); l.textContent='Giriş yapılıyor…';
+  const{error}=await sb.auth.signInWithPassword({email:e,password:p}); if(error){ l.textContent=error.message; return; } start(); }
 
-// --- Selectors ---
-function buildSel(){const ys=new Set(),aBy={},fs=new Set();
-O.forEach(o=>{const y=o[1].slice(0,4),m=+o[1].slice(5,7);ys.add(y);(aBy[y]=aBy[y]||new Set()).add(m);fs.add(o[0]);});
-window._aBy=aBy;sY.innerHTML=[...ys].sort().reverse().map(y=>`<option>${y}</option>`).join('');
-sF.innerHTML='<option value="">Tüm firmalar</option>'+[...fs].sort((a,b)=>FN[a].localeCompare(FN[b],'tr')).map(f=>`<option value="${f}">${esc(FN[f])}</option>`).join('');
-onY(true);}
-function onY(k){const y=sY.value,ms=[...(window._aBy[y]||[])].sort((a,b)=>b-a);sM.innerHTML=ms.map(m=>`<option value="${m}">${AY[m-1]}</option>`).join('');if(!k)go();}
+async function start(){
+  $('loginBox').style.display='none'; $('app').style.display='block';
+  const{data:{user}}=await sb.auth.getUser(); $('who').textContent=user?user.email:'';
+  setState('processing','Veriler yükleniyor…');
+  try{
+    FIRMS = await UTL.getFirms();
+    $('sF').innerHTML='<option value="">Tüm firmalar</option>'+FIRMS.map(f=>`<option value="${f.id}">${esc(f.ad)}</option>`).join('');
+    const daily = await UTL.aggregates.daily({});
+    PERIODS={};
+    daily.forEach(d=>{ const y=String(d.tarih).slice(0,4), m=+String(d.tarih).slice(5,7); (PERIODS[y]=PERIODS[y]||new Set()).add(m); });
+    const years=Object.keys(PERIODS).sort().reverse();
+    $('sY').innerHTML = years.length?years.map(y=>`<option>${y}</option>`).join(''):'<option>'+new Date().getFullYear()+'</option>';
+    onY(true);
+    UTL.subscribe(()=>{ setState('processing','Değişiklik alındı, yenileniyor…'); go(); });
+  }catch(err){ setState('failed','Başlangıç verisi alınamadı — bağlantıyı kontrol et, sayfayı yenile. ('+(err&&err.message||err)+')'); }
+}
+function onY(skip){ const y=$('sY').value; const ms=[...(PERIODS[y]||[])].sort((a,b)=>b-a);
+  $('sM').innerHTML = ms.length?ms.map(m=>`<option value="${m}">${AY[m-1]}</option>`).join(''):'<option value="">—</option>';
+  go(); }
+function setTab(t){ curTab=t; document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('on',el.dataset.t===t)); go(); }
 
-// --- Tabs ---
-function setTab(t){curTab=t;document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('on',['tablo','gunluk','ozet','fatura'][i]===t));go();}
+function curFilter(){ const y=+$('sY').value, m=+$('sM').value, ff=$('sF').value||null;
+  if(!y||!m) return null;
+  const from=`${y}-${String(m).padStart(2,'0')}-01`;
+  const to=`${y}-${String(m).padStart(2,'0')}-${String(new Date(y,m,0).getDate()).padStart(2,'0')}`;
+  return {from,to,firma_id:ff}; }
+function hdr(f){ const y=$('sY').value,m=+$('sM').value,fn=f.firma_id?(FIRMS.find(x=>x.id===f.firma_id)||{}).ad:'';
+  return `<div class="rh"><div><div class="rl">bardak's</div><div class="rs">B2B Operasyon Raporu (canlı DB)</div></div><div class="rf"><b>BARDAKS GIDA TİCARET LTD. ŞTİ.</b><br>Ortahisar / Trabzon</div></div><h2>${AY[m-1]} ${y}${fn?' · '+esc(fn):''}</h2><div class="rm">Oluşturma: ${new Date().toLocaleDateString('tr-TR')} · kaynak: Supabase/UTL</div>`; }
 
-// --- Main render ---
-function go(){const y=sY.value,m=+sM.value,ff=sF.value;if(!y||!m)return;
-const mo=O.filter(o=>o[1].slice(0,4)===y&&+o[1].slice(5,7)===m&&(!ff||o[0]===ff));
-if(curTab==='tablo')renderTablo(y,m,ff,mo);
-else if(curTab==='gunluk')renderGunluk(y,m,ff,mo);
-else if(curTab==='ozet')renderOzet(y,m,ff,mo);
-else if(curTab==='fatura')renderFatura(y,m,ff);
-saveSummary(y,m,ff,mo);}
-
-function dl(ds){const d=new Date(ds+'T00:00:00');return ds.slice(8,10)+'.'+ds.slice(5,7)+' '+GN[d.getDay()];}
-function mk(ds){const d=new Date(ds+'T00:00:00'),off=(d.getDay()+6)%7,m=new Date(d);m.setDate(d.getDate()-off);return m.toISOString().slice(0,10);}
-function hdr(y,m,ff){return `<div class="rh"><div><div class="rl">bardak's</div><div class="rs">B2B Operasyon Raporu</div></div><div class="rf"><b>BARDAKS GIDA TİCARET LTD. ŞTİ.</b><br>Ortahisar / Trabzon</div></div><h2>${AY[m-1]} ${y}${ff?' · '+esc(FN[ff]):''}</h2><div class="rm">Oluşturma: ${new Date().toLocaleDateString('tr-TR')} · ${curTab}</div>`;}
-
-// === A: TABLO (B+C maddesi) ===
-function renderTablo(y,m,ff,mo){
-  const fcs=[...new Set(mo.map(o=>o[0]))].sort((a,b)=>FN[a].localeCompare(FN[b],'tr'));
-  let h='<div id="sh">'+hdr(y,m,ff);
-  if(!mo.length){h+='<p style="color:#999">Kayıt yok.</p></div>';out.innerHTML=h;return;}
-  fcs.forEach(fc=>{
-    h+=`<div class="fh">▸ ${esc(FN[fc])}</div>`;
-    const wks={};mo.filter(o=>o[0]===fc).forEach(o=>{const k=mk(o[1]);(wks[k]=wks[k]||[]).push(o);});
-    Object.keys(wks).sort().forEach(wk=>{
-      const wo=wks[wk].sort((a,b)=>a[1]<b[1]?-1:1),days=[...new Set(wo.map(o=>o[1]))].sort();
-      const pm={};wo.forEach(o=>o[2].forEach(it=>{const p=pm[it[0]]=pm[it[0]]||{f:it[2],d:{},a:0,t:0};p.d[o[1]]=(p.d[o[1]]||0)+it[1];p.a+=it[1];p.t+=it[1]*it[2];p.f=it[2];}));
-      const pr=Object.keys(pm).sort((a,b)=>pm[b].a-pm[a].a);
-      h+=`<div class="wk">📅 ${wk.slice(8,10)}.${wk.slice(5,7)} – ${days[days.length-1].slice(8,10)}.${days[days.length-1].slice(5,7)} HAFTASI</div><div class="gw"><table class="g"><tr><th class="u">ÜRÜN ADI</th><th>BİRİM FİYAT</th>${days.map(d=>`<th>${dl(d)}</th>`).join('')}<th class="t">TOPLAM ADET</th><th class="t">TOPLAM TUTAR</th></tr>`;
-      pr.forEach(pi=>{const p=pm[pi];h+=`<tr><td class="u">${esc(P[pi])}</td><td class="bf">${TL(p.f)}</td>${days.map(d=>`<td>${p.d[d]?AD(p.d[d]):''}</td>`).join('')}<td class="t">${AD(p.a)}</td><td class="t n">${TL(p.t)}</td></tr>`;});
-      const dt={};let wa=0,wt=0;days.forEach(d=>dt[d]=0);pr.forEach(pi=>{const p=pm[pi];wa+=p.a;wt+=p.t;days.forEach(d=>{if(p.d[d])dt[d]+=p.d[d];});});
-      h+=`<tr class="gl"><td class="u">GÜNLÜK TOPLAM ADET</td><td></td>${days.map(d=>`<td>${AD(dt[d])}</td>`).join('')}<td>${AD(wa)}</td><td></td></tr>`;
-      h+=`<tr class="hl"><td class="u">HAFTALIK TOPLAM (%1 KDV dahil)</td><td></td><td colspan="${days.length}"></td><td>${AD(wa)}</td><td class="n">${TL(wt*1.01)}</td></tr></table></div>`;
-    });
-  });
-  h+=sumBlock(mo)+'</div>';out.innerHTML=h;
+async function go(){
+  const f=curFilter(); const out=$('out');
+  if(!f){ out.innerHTML='<div class="empty">Dönem seçili değil.</div>'; clearState(); return; }
+  setState('processing','Rapor hesaplanıyor…');
+  try{
+    let html='';
+    if(curTab==='ozet')        html=await viewOzet(f);
+    else if(curTab==='urun')   html=await viewUrun(f);
+    else if(curTab==='gunluk') html=await viewGunluk(f);
+    else if(curTab==='fatura') html=await viewFatura(f);
+    out.innerHTML=html;
+    setState('confirmed','Güncel · Supabase tek kaynağından (UTL)');
+  }catch(err){ setState('failed','Rapor üretilemedi — '+(err&&err.message||err)+'. Tekrar denemek için dönemi değiştir veya sayfayı yenile.'); }
 }
 
-// === B: GÜNLÜK DETAY (A maddesi) ===
-function renderGunluk(y,m,ff,mo){
-  const allDays=[...new Set(mo.map(o=>o[1]))].sort();
-  let h='';
-  allDays.forEach(ds=>{
-    const dayOrd=mo.filter(o=>o[1]===ds);
-    const prods={};let dayAdet=0,dayHaric=0;
-    dayOrd.forEach(o=>o[2].forEach(it=>{const k=P[it[0]]+'|||'+it[2];const p=prods[k]=prods[k]||{ad:P[it[0]],f:it[2],a:0};p.a+=it[1];dayAdet+=it[1];dayHaric+=it[1]*it[2];}));
-    const pl=Object.values(prods).sort((a,b)=>b.a-a.a);
-    const d=new Date(ds+'T00:00:00');const dayLabel=ds.slice(8,10)+' '+AY[+ds.slice(5,7)-1]+' '+ds.slice(0,4)+' '+['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'][d.getDay()];
-    h+=`<div class="day-card"><h3>📅 ${dayLabel}</h3><table><tr><th>Ürün</th><th class="n">Adet</th><th class="n">Birim Fiyat</th><th class="n">KDV Dahil B.F.</th><th class="n">Toplam</th></tr>`;
-    pl.forEach(p=>{h+=`<tr><td>${esc(p.ad)}</td><td class="n">${AD(p.a)}</td><td class="n">${TL(p.f)}</td><td class="n">${TL(p.f*1.01)}</td><td class="n">${TL(p.a*p.f*1.01)}</td></tr>`;});
-    h+=`<tr class="tot"><td><b>Toplam</b></td><td class="n"><b>${AD(dayAdet)}</b></td><td></td><td></td><td class="n"><b>${TL(dayHaric*1.01)}</b></td></tr></table></div>`;
-  });
-  if(!h)h='<div style="padding:20px;color:var(--dm)">Bu ay için kayıt yok.</div>';
-  out.innerHTML=h;
-}
-
-// === C: ÖZET & ANALİTİK (D+E+F+J maddesi) ===
-function renderOzet(y,m,ff,mo){
-  const pT={},fT={};let gH=0,gA=0;
-  mo.forEach(o=>{fT[o[0]]=fT[o[0]]||{h:0,a:0};o[2].forEach(it=>{pT[it[0]]=pT[it[0]]||{a:0,h:0};pT[it[0]].a+=it[1];pT[it[0]].h+=it[1]*it[2];fT[o[0]].h+=it[1]*it[2];fT[o[0]].a+=it[1];gH+=it[1]*it[2];gA+=it[1];});});
-  // Analitik kartlar
-  const fCount=Object.keys(fT).length;
-  const topProd=Object.keys(pT).sort((a,b)=>pT[b].a-pT[a].a)[0];
-  const topFirma=Object.keys(fT).sort((a,b)=>fT[b].h-fT[a].h)[0];
+async function viewOzet(f){
+  const v=await UTL.getReportView(f);
+  const fin=v.financial||{}, firm=v.firm||[], urun=v.urun||[];
+  if(!firm.length){ return '<div class="empty">Bu dönemde sipariş yok (boş durum).</div>'; }
+  const topU=urun[0];
   let h='<div class="an-grid">';
-  h+=`<div class="an-card"><div class="v">${AD(gA)}</div><div class="l">Toplam Adet</div></div>`;
-  h+=`<div class="an-card"><div class="v">${TL(gH)}</div><div class="l">Toplam Ciro (KDV hariç)</div></div>`;
-  h+=`<div class="an-card"><div class="v">${TL(gH*1.01)}</div><div class="l">Toplam Ciro (KDV dahil)</div></div>`;
-  h+=`<div class="an-card"><div class="v">${fCount}</div><div class="l">Aktif Firma</div></div>`;
-  h+=`<div class="an-card"><div class="v">${topProd?esc(P[topProd]):'—'}</div><div class="l">En Çok Satan Ürün (${topProd?AD(pT[topProd].a):''})</div></div>`;
-  h+=`<div class="an-card"><div class="v">${topFirma?esc(FN[topFirma]):'—'}</div><div class="l">En Yüksek Ciro Firma</div></div>`;
+  h+=`<div class="an-card"><div class="v">${TL(fin.ciro_haric)}</div><div class="l">Ciro (KDV hariç)</div></div>`;
+  h+=`<div class="an-card"><div class="v">${TL(fin.ciro_dahil)}</div><div class="l">Ciro (KDV dahil)</div></div>`;
+  h+=`<div class="an-card"><div class="v gn">${TL(fin.brut_kar)}</div><div class="l">Brüt Kâr</div></div>`;
+  h+=`<div class="an-card"><div class="v ${(+fin.net_kar>=0)?'gn':'rd'}">${TL(fin.net_kar)}</div><div class="l">Net Kâr</div></div>`;
+  h+=`<div class="an-card"><div class="v">${TL(fin.tahsilat)}</div><div class="l">Tahsilat</div></div>`;
+  h+=`<div class="an-card"><div class="v">${topU?esc(topU.urun_ad):'—'}</div><div class="l">En Çok Satan${topU?' ('+AD(topU.toplam_adet)+')':''}</div></div>`;
   h+='</div>';
-  // Aylık ürün özeti (E)
-  const pl=Object.keys(pT).sort((a,b)=>pT[b].a-pT[a].a);
-  h+=`<div id="sh"><div class="st">AYLIK ÜRÜN ÖZETİ (E)</div><table class="sm"><tr><th>Ürün</th><th class="n">Toplam Adet</th><th class="n">KDV Hariç</th><th class="n">KDV Dahil</th></tr>`;
-  pl.forEach(p=>{h+=`<tr><td>${esc(P[p])}</td><td class="n">${AD(pT[p].a)}</td><td class="n">${TL(pT[p].h)}</td><td class="n">${TL(pT[p].h*1.01)}</td></tr>`;});
-  h+=`<tr class="tr"><td>TOPLAM</td><td class="n">${AD(gA)}</td><td class="n">${TL(gH)}</td><td class="n">${TL(gH*1.01)}</td></tr></table>`;
-  // Firma bazlı (F)
-  if(!ff){
-    const fl=Object.keys(fT).sort((a,b)=>fT[b].h-fT[a].h);
-    h+=`<div class="st">FİRMA BAZLI AYLIK RAPOR (F)</div><table class="sm"><tr><th>Firma</th><th class="n">Adet</th><th class="n">KDV Hariç</th><th class="n">KDV Dahil</th></tr>`;
-    fl.forEach(f=>{h+=`<tr><td>${esc(FN[f])}</td><td class="n">${AD(fT[f].a)}</td><td class="n">${TL(fT[f].h)}</td><td class="n">${TL(fT[f].h*1.01)}</td></tr>`;});
-    h+=`<tr class="tr"><td>GENEL TOPLAM</td><td class="n">${AD(gA)}</td><td class="n">${TL(gH)}</td><td class="n">${TL(gH*1.01)}</td></tr></table>`;
-  }
-  // Aylık trend (J — aynı yılın ayları)
-  const months=[...(window._aBy[y]||[])].sort();
-  if(months.length>1){
-    h+=`<div class="st">AYLIK CİRO TRENDİ (${y})</div><table class="sm"><tr><th>Ay</th><th class="n">Toplam Adet</th><th class="n">KDV Dahil</th></tr>`;
-    months.forEach(mm=>{const mmo=O.filter(o=>o[1].slice(0,4)===y&&+o[1].slice(5,7)===mm&&(!ff||o[0]===ff));let ma=0,mh=0;mmo.forEach(o=>o[2].forEach(it=>{ma+=it[1];mh+=it[1]*it[2];}));
-    h+=`<tr${mm===m?' style="font-weight:700;background:#faf7f0"':''}><td>${AY[mm-1]}</td><td class="n">${AD(ma)}</td><td class="n">${TL(mh*1.01)}</td></tr>`;});
-    h+='</table>';
-  }
-  h+='</div>';out.innerHTML=h;
-}
-
-// === G: FATURA TAKİBİ ===
-function renderFatura(y,m,ff){
-  if(!dbSip){out.innerHTML='<div style="padding:20px;color:var(--dm)">Fatura verisi yükleniyor… (giriş gerekli)</div>';return;}
-  const ms=dbSip.filter(s=>s.tarih&&s.tarih.slice(0,4)===y&&+s.tarih.slice(5,7)===m&&(!ff||s.firma_id===(window.FMAP||{})[ff]));
-  const stats={bekliyor:0,kesildi:0,iptal:0};
-  ms.forEach(s=>stats[s.fatura_durumu||'bekliyor']++);
-  let h=`<div class="an-grid">`;
-  h+=`<div class="an-card"><div class="v tag-r">${stats.bekliyor}</div><div class="l">Faturalanmadı</div></div>`;
-  h+=`<div class="an-card"><div class="v tag-g">${stats.kesildi}</div><div class="l">Fatura Kesildi</div></div>`;
-  h+=`<div class="an-card"><div class="v tag-y">${stats.iptal}</div><div class="l">İptal</div></div>`;
-  h+='</div>';
-  if(!ms.length){h+='<div style="padding:20px;color:var(--dm)">Bu ay için sipariş yok.</div>';out.innerHTML=h;return;}
-  const firms={};ms.forEach(s=>{const fn=Object.entries(window.FMAP||{}).find(([k,v])=>v===s.firma_id);const fk=fn?fn[0]:s.firma_id;firms[fk]=firms[fk]||[];firms[fk].push(s);});
-  Object.keys(firms).sort().forEach(fk=>{
-    h+=`<div style="font-weight:700;margin:14px 0 6px">${esc(FN[fk]||fk)}</div>`;
-    firms[fk].sort((a,b)=>a.tarih<b.tarih?-1:1).forEach(s=>{
-      const stat=s.fatura_durumu||'bekliyor';
-      const cls=stat==='kesildi'?'tag-g':stat==='iptal'?'tag-y':'tag-r';
-      h+=`<div class="fat-row"><div><div class="fname">${esc(s.siparis_no||s.tarih)}</div><div style="font-size:12px;color:var(--dm)">${s.tarih} · ${TL(s.toplam_kdv_dahil)}</div></div>`;
-      h+=`<div class="fstat"><span class="${cls}">${stat==='kesildi'?'✅ Kesildi':stat==='iptal'?'❌ İptal':'⏳ Bekliyor'}</span>`;
-      if(s.fatura_no)h+=`<div style="font-size:11px;color:var(--dm)">No: ${esc(s.fatura_no)}</div>`;
-      h+='</div></div>';
-    });
-  });
-  out.innerHTML=h;
-}
-
-// --- Ortak bölümler ---
-function sumBlock(mo){
-  const pT={},fT={};let gH=0;
-  mo.forEach(o=>{fT[o[0]]=fT[o[0]]||{h:0};o[2].forEach(it=>{pT[it[0]]=pT[it[0]]||{a:0,h:0};pT[it[0]].a+=it[1];pT[it[0]].h+=it[1]*it[2];fT[o[0]].h+=it[1]*it[2];gH+=it[1]*it[2];});});
-  const pl=Object.keys(pT).sort((a,b)=>pT[b].a-pT[a].a);
-  let h=`<div class="st">AYLIK ÜRÜN TOPLAMLARI</div><table class="sm"><tr><th>Ürün</th><th class="n">Adet</th><th class="n">KDV Dahil</th></tr>`;
-  pl.forEach(p=>{h+=`<tr><td>${esc(P[p])}</td><td class="n">${AD(pT[p].a)}</td><td class="n">${TL(pT[p].h*1.01)}</td></tr>`;});
-  h+='</table>';
-  if(!sF.value){const fl=Object.keys(fT).sort((a,b)=>fT[b].h-fT[a].h);
-    h+=`<div class="st">FİRMA ÖZETİ</div><table class="sm"><tr><th>Firma</th><th class="n">KDV Hariç</th><th class="n">KDV Dahil</th></tr>`;
-    fl.forEach(f=>{h+=`<tr><td>${esc(FN[f])}</td><td class="n">${TL(fT[f].h)}</td><td class="n">${TL(fT[f].h*1.01)}</td></tr>`;});
-    h+=`<tr class="tr"><td>GENEL TOPLAM</td><td class="n">${TL(gH)}</td><td class="n">${TL(gH*1.01)}</td></tr></table>`;}
-  h+=`<div class="gr">GENEL TOPLAM (KDV dahil): ${TL(gH*1.01)}</div>`;
-  h+=`<div class="ft">bardak's B2B · Sistemden otomatik üretildi · Resmi fatura yerine geçmez.</div>`;
+  h+='<div id="sh">'+hdr(f);
+  h+='<div class="st">FİRMA BAZLI ÖZET</div><table class="sm"><tr><th>Firma</th><th class="n">Adet</th><th class="n">KDV Hariç</th><th class="n">KDV Dahil</th></tr>';
+  firm.forEach(r=>{ h+=`<tr><td>${esc(r.firma_ad||'—')}</td><td class="n">${AD(r.toplam_adet)}</td><td class="n">${TL(r.kdv_haric)}</td><td class="n">${TL(r.kdv_dahil)}</td></tr>`; });
+  h+=`<tr class="tr"><td>GENEL TOPLAM</td><td class="n">${AD(firm.reduce((s,r)=>s+(+r.toplam_adet||0),0))}</td><td class="n">${TL(fin.ciro_haric)}</td><td class="n">${TL(fin.ciro_dahil)}</td></tr></table>`;
+  h+=`<div class="gr">GENEL TOPLAM (KDV dahil): ${TL(fin.ciro_dahil)}</div>`;
+  h+='<div class="ft">bardak\'s B2B · Supabase/UTL tek kaynağından otomatik üretildi.</div></div>';
   return h;
 }
-
-// --- İlet/PDF ---
-function saveSummary(y,m,ff,mo){let gH=0;mo.forEach(o=>o[2].forEach(it=>gH+=it[1]*it[2]));
-window._sum={ay:AY[m-1],yil:y,title:`Bardaks ${AY[m-1]} ${y} Rapor`,fileName:`Bardaks_${y}_${String(m).padStart(2,'0')}${ff?'_'+FN[ff].replace(/\s+/g,'_'):''}.pdf`,
-summaryText:`bardak's B2B — ${AY[m-1]} ${y}${ff?' · '+FN[ff]:''}\nGenel Toplam (KDV dahil): ${TL(gH*1.01)}\n\nDetaylı rapor PDF ektedir.`};
-if(LU){URL.revokeObjectURL(LU);LU=null;}LF=null;}
-async function ilet(){const s=window._sum;if(!s)return;const b=document.getElementById('bI');b.disabled=true;b.textContent='…';
-let f=null;try{const el=document.getElementById('sh')||document.getElementById('out');
-const bl=await html2pdf().set({margin:[6,6,8,6],filename:s.fileName,image:{type:'jpeg',quality:.95},html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},jsPDF:{unit:'mm',format:'a4',orientation:'landscape'},pagebreak:{mode:['css','legacy']}}).from(el).outputPdf('blob');
-f=new File([bl],s.fileName,{type:'application/pdf'});LF=f;if(LU)URL.revokeObjectURL(LU);LU=URL.createObjectURL(f);}catch(e){console.warn(e);}
-b.disabled=false;b.textContent='📤 İlet';
-if(f&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:s.title,text:s.summaryText});return;}catch(e){if(e&&e.name==='AbortError')return;}}
-osov();}
-function osov(){const s=window._sum;swa.href='https://wa.me/?text='+encodeURIComponent(s.summaryText);sml.href='mailto:?subject='+encodeURIComponent(s.title)+'&body='+encodeURIComponent(s.summaryText);spf.style.display=LF?'flex':'none';document.getElementById('sov').classList.add('open');}
-function csov(){document.getElementById('sov').classList.remove('open');}
-function dlpdf(){if(!LU)return;const a=document.createElement('a');a.href=LU;a.download=window._sum.fileName;a.click();}
+async function viewUrun(f){
+  const urun=await UTL.aggregates.urun(f);
+  if(!urun.length) return '<div class="empty">Bu dönemde ürün hareketi yok.</div>';
+  let h='<div id="sh">'+hdr(f)+'<div class="st">ÜRÜN BAZLI ÖZET</div><table class="sm"><tr><th>Ürün</th><th class="n">Toplam Adet</th><th class="n">KDV Hariç</th><th class="n">KDV Dahil</th></tr>';
+  urun.forEach(r=>{ h+=`<tr><td>${esc(r.urun_ad)}</td><td class="n">${AD(r.toplam_adet)}</td><td class="n">${TL(r.kdv_haric)}</td><td class="n">${TL(r.kdv_dahil)}</td></tr>`; });
+  h+='</table><div class="ft">Ürün toplamları sunucu tarafı (rapor_urun) — yerel hesap yok.</div></div>';
+  return h;
+}
+async function viewGunluk(f){
+  const rows=await UTL.aggregates.urunGun(f);
+  const daily=await UTL.aggregates.daily(f);
+  if(!rows.length) return '<div class="empty">Bu dönemde günlük hareket yok.</div>';
+  const dmap={}; rows.forEach(r=>{ (dmap[r.tarih]=dmap[r.tarih]||[]).push(r); });
+  const dtot={}; daily.forEach(d=>dtot[d.tarih]=d);
+  let h='';
+  Object.keys(dmap).sort().forEach(t=>{
+    const d=new Date(t+'T00:00:00'); const gl=['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'][d.getDay()];
+    const tt=dtot[t]||{};
+    h+=`<div class="day-card"><h3>📅 ${String(t).slice(8,10)} ${AY[+String(t).slice(5,7)-1]} ${String(t).slice(0,4)} ${gl}</h3>`;
+    h+='<table><tr><th>Ürün</th><th class="n">Adet</th><th class="n">KDV Hariç</th><th class="n">KDV Dahil</th></tr>';
+    dmap[t].forEach(r=>{ h+=`<tr><td>${esc(r.urun_ad)}</td><td class="n">${AD(r.toplam_adet)}</td><td class="n">${TL(r.kdv_haric)}</td><td class="n">${TL(r.kdv_dahil)}</td></tr>`; });
+    h+=`<tr class="tot"><td>Günlük Toplam</td><td class="n">${AD(tt.toplam_adet)}</td><td class="n">${TL(tt.kdv_haric)}</td><td class="n">${TL(tt.kdv_dahil)}</td></tr></table></div>`;
+  });
+  return h;
+}
+async function viewFatura(f){
+  const orders=await UTL.getOrders(f);
+  if(!orders.length) return '<div class="empty">Bu dönemde sipariş yok.</div>';
+  let h='<div class="an-grid">';
+  const byFirm={}; orders.forEach(o=>{ const fn=(FIRMS.find(x=>x.id===o.firma_id)||{}).ad||'—'; (byFirm[fn]=byFirm[fn]||[]).push(o); });
+  h+=`<div class="an-card"><div class="v">${orders.length}</div><div class="l">Sipariş (dönem)</div></div>`;
+  h+=`<div class="an-card"><div class="v">${TL(orders.reduce((s,o)=>s+(+o.kdv_dahil||0),0))}</div><div class="l">Toplam (KDV dahil)</div></div></div>`;
+  Object.keys(byFirm).sort().forEach(fn=>{
+    h+=`<div style="font-weight:700;margin:12px 0 6px">${esc(fn)}</div>`;
+    byFirm[fn].sort((a,b)=>a.tarih<b.tarih?-1:1).forEach(o=>{
+      h+=`<div class="fat-row"><div><div style="font-weight:700">${esc(o.tarih)}</div><div style="font-size:12px;color:var(--dm)">${esc(o.durum)} · ${o.source}</div></div><div>${TL(o.kdv_dahil)}</div></div>`;
+    });
+  });
+  return h;
+}
+function dlpdf(){ const el=$('out').querySelector('#sh')||$('out');
+  if(!el){ setState('failed','PDF için içerik yok.'); return; }
+  setState('processing','PDF hazırlanıyor…');
+  html2pdf().set({margin:[6,6,8,6],filename:'Bardaks_Rapor.pdf',image:{type:'jpeg',quality:.95},html2canvas:{scale:2,backgroundColor:'#ffffff'},jsPDF:{unit:'mm',format:'a4',orientation:'landscape'}}).from(el).save()
+    .then(()=>setState('confirmed','PDF indirildi')).catch(e=>setState('failed','PDF üretilemedi: '+(e&&e.message||e)));
+}
 </script>
 </body>
 </html>
