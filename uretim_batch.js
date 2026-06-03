@@ -342,3 +342,6 @@
 
 /* === finguard.js (4F.0) yükleyici — legacy/import firma bakiye/alacak UI redaksiyonu === */
 (function(){ try{ if(document.querySelector('script[data-fg]')) return; var s=document.createElement('script'); s.src='finguard.js?v=4F.0-001'; s.setAttribute('data-fg','1'); document.body.appendChild(s); }catch(e){} })();
+
+/* === ux_polish.css (UX-1) yükleyici — companion görsel cila (CSS-only) === */
+(function(){ try{ if(document.querySelector('link[data-uxp]')) return; var l=document.createElement('link'); l.rel='stylesheet'; l.href='ux_polish.css?v=ux1-001'; l.setAttribute('data-uxp','1'); document.head.appendChild(l); }catch(e){} })();

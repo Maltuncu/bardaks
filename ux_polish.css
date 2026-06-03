@@ -1,0 +1,61 @@
+/* Bardaks UX-1 companion visual polish (CSS-only, reversible).
+   index.html unchanged. No function/flow/render/mutation/color-semantics change.
+   Only: typography consistency, neutral background, card/button/badge/table polish.
+   Semantic inline colors (var(--red)/var(--green) etc.) and finguard redaction view
+   ("—" / "Finansal dogrulama bekliyor") PRESERVED — inline styles win. */
+
+/* 1) Typography: consistent modern sans-serif across surface (kill root serif default) */
+html, body, button, input, select, textarea, .nav-item, .card, table {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+}
+body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+/* 2) Background: cream -> neutral clean ops panel */
+body { background: #eef1f5 !important; }
+
+/* 3) Cards: tidy radius (max 8) + soft shadow + neutral default border.
+   Warning cards' inline border-color:var(--red) etc. PRESERVED (inline wins). */
+.card {
+  border-radius: 8px !important;
+  box-shadow: 0 1px 2px rgba(16,32,56,.06), 0 1px 3px rgba(16,32,56,.05) !important;
+  border: 1px solid #dfe4ea;
+  background: #ffffff;
+}
+
+/* 4) Buttons: consistent height/radius + hover/focus (no text/function change) */
+.btn {
+  border-radius: 8px !important;
+  min-height: 38px;
+  transition: filter .12s ease, box-shadow .12s ease;
+}
+.btn:hover { filter: brightness(.96); }
+.btn:focus-visible { outline: 2px solid #1e5ba8; outline-offset: 2px; }
+.btn-sm { min-height: 30px; }
+
+/* 5) Nav: breathing room; visible badges separated */
+.nav-item { gap: 4px; }
+.nav-ico { margin-right: 2px; }
+.badge, .nav-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 16px; padding: 0 4px; margin-left: 4px;
+  border-radius: 999px; font-size: 10px; line-height: 1;
+  background: #c0392b; color: #fff; font-weight: 700;
+}
+.badge.hidden, .nav-badge.hidden { display: none !important; }
+
+/* 6) Tables: numeric readability + aligned spacing */
+.card table { border-collapse: collapse; width: 100%; }
+.card table td, .card table th { padding: 7px 8px; }
+.card table td[style*="text-align:right"], .card table th[style*="text-align:right"] {
+  font-variant-numeric: tabular-nums; font-feature-settings: "tnum";
+}
+
+/* 7) Stat boxes: radius harmony */
+.stat { border-radius: 8px; }
+
+/* 8) Mobile: small safe improvements (scroll wide tables, prevent overflow) */
+@media (max-width: 560px) {
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .card { padding: 13px !important; }
+  .stats { gap: 8px; }
+}
