@@ -1,7 +1,8 @@
 /* Bardaks UX-1B — calm/professional refinement (CSS-only, reversible).
    index.html unchanged. No JS/data/render/mutation change. Finguard redaction preserved.
    Direction: Apple-like calm clarity + restrained Bardaks brand accent (logo blue) + dense B2B usability.
-   Semantic status colors (red/green) kept clear; brand color used ONLY as restrained accent. */
+   Semantic status colors (red/green) kept clear; brand color used ONLY as restrained accent.
+   NOTE: Bardaks line-art = inspiration / design language only (see BRAND_GUIDE.md); no inline illustration printed. */
 
 :root{
   --ux-brand:#1e5ba8;     /* Bardaks logo accent */
@@ -89,15 +90,3 @@ body { background: var(--ux-bg) !important; -webkit-font-smoothing: antialiased;
   .nav-item{ font-size: 10px; }
   .nav-item .nav-ico{ font-size: 17px; }
 }
-
-/* ---- 4F.0 brand touch: single small monoline coffee-cup above the panel's
-   "Finansal dogrulama bekliyor" (finguard) empty-state. One screen / one image; data-first kept.
-   Inline data-URI -> always available; redaction text unaffected (::before is decorative only). ---- */
-#page-panel .card[data-fg="1"]::before{
-  content: "";
-  display: block;
-  width: 108px; height: 108px;
-  margin: 2px auto 8px;
-  background: url('data:image/jpeg;base64,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') center/contain no-repeat;
-}
-@media (max-width: 560px){ #page-panel .card[data-fg="1"]::before{ width: 88px; height: 88px; } }

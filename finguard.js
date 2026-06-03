@@ -1,8 +1,9 @@
-/* Bardaks ERP — finguard.js  [Phase 4F.0]
+/* Bardaks ERP — finguard.js  [Phase 4F.0 + 4F.1]
    Manual Financial Cutover öncesi: legacy/import firma alacak/bakiye değerlerini
    UI'da financial truth gibi GÖSTERME. Veri/DB/realtime/mutation/observe DOKUNULMAZ — yalnız görsel redaksiyon.
    index.html'e dokunmaz; renderPanel + renderFinans çıktısını render SONRASI redakte eder. Kill-switch'li.
-   Eşleşme ASCII-önek (Türkçe etiketlerin önekiyle), kullanıcı metni tam Türkçe. */
+   Eşleşme ASCII-önek (Türkçe etiketlerin önekiyle), kullanıcı metni tam Türkçe.
+   4F.1: panel 'Tahsilat Oranı' da redakte (cutover öncesi ödeme verisi eksik -> yanıltıcı). */
 (function(){
   'use strict';
   var FVER='4F.0';
@@ -23,7 +24,7 @@
       var labels=el.querySelectorAll('.stat-label');
       Array.prototype.forEach.call(labels,function(lb){
         var t=(lb.textContent||'').trim();
-        if(t.indexOf('Tahsil Edilmemi')===0 || t.indexOf('Vadesi Ge')===0){
+        if(t.indexOf('Tahsil Edilmemi')===0 || t.indexOf('Vadesi Ge')===0 || t.indexOf('Tahsilat Oran')===0){
           var val=lb.parentNode && lb.parentNode.querySelector('.stat-value');
           if(val && val.getAttribute('data-fg')!=='1'){ val.textContent='—'; val.style.color='var(--text-dim)'; val.title=NOTE; val.setAttribute('data-fg','1'); ST.redactions++; }
         }
