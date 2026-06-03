@@ -1,15 +1,40 @@
-/* Bardaks ERP — index_bridge.js  [Phase 4B.1 + 4B.2 + 4B.4 + sentinel]
+/* Bardaks ERP — index_bridge.js  [Phase 4B.1 + 4B.2 + 4B.4 + 4B.5R2 diagnostics + RT_AUDIT sentinel]
    - durumIlerlet + durumDegistir WRITE-path -> UTL.mutate.single (apply_batch_transition, N=1). TAM REPLACEMENT, double-write yok.
    - 4B.4 Undo: son batch için admin/müdür'e "↩ Geri Al" (revert_last_operation). Optimistic YOK. İmalathane göremez.
+   - 4B.5R2: IB_STATUS error semantics ayrıştırıldı (UTL_MISSING / SB_MISSING / BRIDGE_FN_MISSING / CURRENT_MISSING + AUTH_PENDING) + RT_AUDIT telemetry sentinel.
    - READ path eski; realtime'a dokunulmaz. index.html'e dokunulmaz. */
 (function(){
   'use strict';
   var VERSION = '4B.4';
-  window.IB_STATUS = { loaded:false, version:VERSION, overrides:{durumIlerlet:false, durumDegistir:false}, undo:false, loaded_at:null, error:null };
+  window.IB_STATUS = { loaded:false, version:VERSION, overrides:{durumIlerlet:false, durumDegistir:false}, undo:false, loaded_at:null, error:null, diag:null };
   if(window.__IB_LOADED){ window.IB_STATUS.error='DOUBLE_LOAD'; return; } window.__IB_LOADED = true;
 
   function ready(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded',fn); }
-  function waitFor(c,cb,t){ t=(t==null)?120:t; if(c()){cb();return;} if(t<=0){ window.IB_STATUS.error='UTL_MISSING'; try{console.warn('IB: UTL yok -> UTL_MISSING');}catch(e){} return; } setTimeout(function(){waitFor(c,cb,t-1);},250); }
+
+  /* PRE-4B.5R2: eksik parçayı DOĞRU isimlendir. UTL_MISSING yalnız UTL/UTL.mutate gerçekten yoksa kullanılır.
+     CURRENT/login eksikliği AYRI: AUTH_PENDING -> kalıcı fail DEĞİL, polling sürer, CURRENT gelince install. */
+  function ibDiag(){
+    if(!(window.UTL && window.UTL.mutate)) return 'UTL_MISSING';
+    if(typeof sb==='undefined' || !sb) return 'SB_MISSING';
+    if(typeof durumIlerlet!=='function') return 'BRIDGE_FN_MISSING';
+    if(typeof CURRENT==='undefined' || !CURRENT) return 'CURRENT_MISSING';
+    return null;
+  }
+  function waitInstall(n){
+    if(window.IB_STATUS.loaded) return;
+    var d = ibDiag();
+    if(d===null){ install(); return; }
+    window.IB_STATUS.diag = d;
+    if(d==='CURRENT_MISSING'){
+      window.IB_STATUS.error = 'AUTH_PENDING';                           // login bekleniyor; override KALICI fail değil
+      if(n < 2400){ setTimeout(function(){ waitInstall(n+1); }, 250); }  // ~10 dk polling; CURRENT gelince install, error null olur
+      else { window.IB_STATUS.error = 'CURRENT_MISSING'; }
+      return;
+    }
+    if(n >= 120){ window.IB_STATUS.error = d; try{ console.warn('IB not ready -> '+d); }catch(e){} return; }  // UTL/sb/bridge ~30s sonra GERÇEK spesifik error
+    setTimeout(function(){ waitInstall(n+1); }, 250);
+  }
+
   function T(t,b){ try{ if(typeof toast==='function'){ toast(t,b||''); return; } }catch(e){} }
   function dAd(d){ try{ return (typeof durumAd==='function')?durumAd(d):d; }catch(e){ return d; } }
   function refresh(){ try{ if(typeof closeModal==='function') closeModal(); }catch(e){} try{ if(typeof renderSiparis==='function') renderSiparis(); }catch(e){} }
@@ -18,10 +43,7 @@
 
   var LAST_BATCH=null, undoTimer=null;
 
-  ready(function(){
-    waitFor(function(){ return window.UTL && window.UTL.mutate && typeof sb!=='undefined' && sb
-      && typeof durumIlerlet==='function' && typeof CURRENT!=='undefined' && CURRENT; }, install);
-  });
+  ready(function(){ waitInstall(0); });
 
   async function doTransition(sid, yeni, rfn){
     var cur;
@@ -101,7 +123,7 @@
       var okI=(typeof window.durumIlerlet==='function'), okD=(typeof window.durumDegistir==='function');
       window.IB_STATUS = { loaded:true, version:VERSION,
         overrides:{ durumIlerlet:okI, durumDegistir:okD }, undo:true, undo_role:canUndo(),
-        loaded_at:new Date().toISOString(), error:(okI&&okD)?null:'OVERRIDE_FAILED' };
+        loaded_at:new Date().toISOString(), error:(okI&&okD)?null:'OVERRIDE_FAILED', diag:null };
       try{ console.log('IB_READY version='+VERSION+' overrides='+okI+'/'+okD+' undo=true'); }catch(e){}
     }catch(e){ window.IB_STATUS.error='OVERRIDE_FAILED'; window.IB_STATUS.loaded=true; try{console.warn('IB OVERRIDE_FAILED',e);}catch(e2){} }
   }
@@ -119,4 +141,130 @@
     }catch(e){}
     setTimeout(function(){ reconcile(bid, from, yeni, n+1, rfn); }, 2200);
   }
+})();
+
+/* ============================================================
+   Phase 4B.5B0 — Runtime Telemetry Sentinel  (ADDITIVE / READ-ONLY)
+   Companion-only. index.html'e DOKUNMAZ. Realtime/render davranışı DEĞİŞMEZ.
+   Sadece sayım + timing. Safe-wrap: orijinal this/arguments/return korunur.
+   Hata kodları: DOUBLE_LOAD, WRAP_FAILED, UTL_MISSING.
+   ============================================================ */
+(function(){
+  'use strict';
+  var SVER = '4B.5B0';
+  function now(){ return (window.performance && performance.now) ? performance.now() : Date.now(); }
+
+  /* ---- DOUBLE_LOAD guard ---- */
+  if(window.__RT_AUDIT_LOADED || (window.RT_AUDIT && window.RT_AUDIT.loaded)){
+    try{ if(window.RT_AUDIT) window.RT_AUDIT.error = window.RT_AUDIT.error || 'DOUBLE_LOAD'; }catch(e){}
+    try{ console.warn('RT_AUDIT DOUBLE_LOAD ignored'); }catch(e){}
+    return;
+  }
+  window.__RT_AUDIT_LOADED = true;
+
+  var RT = {
+    loaded: true,
+    version: SVER,
+    loaded_at: new Date().toISOString(),
+    error: null,
+    counters: {
+      renderSiparis: 0, renderUretim: 0, renderPanel: 0,
+      refreshSohbetBadge: 0, mutationRefreshes: 0, duplicateWindowHits: 0
+    },
+    lastCalls: {},
+    duplicateWindowMs: 400,
+    wrapped: {
+      renderSiparis: false, renderUretim: false, renderPanel: false,
+      refreshSohbetBadge: false, UTLMutateSingle: false
+    }
+  };
+  window.RT_AUDIT = RT;
+
+  /* sayaç + duplicate-window + timing kaydı */
+  function hit(key, counterKey){
+    var t = now();
+    if(counterKey){ RT.counters[counterKey] = (RT.counters[counterKey]||0) + 1; }
+    var last = RT.lastCalls[key];
+    if(last && (t - last.at) <= RT.duplicateWindowMs){ RT.counters.duplicateWindowHits++; }
+    RT.lastCalls[key] = { at: t, duration_ms: (last && last.duration_ms!=null) ? last.duration_ms : null };
+    return t;
+  }
+  function dur(key, t0){ try{ var d = Math.round(now() - t0); if(RT.lastCalls[key]) RT.lastCalls[key].duration_ms = d; }catch(e){} }
+
+  /* global window fonksiyonunu güvenli sar (counterKey = artırılacak sayaç) */
+  function wrapGlobal(name, counterKey){
+    try{
+      var orig = window[name];
+      if(typeof orig !== 'function') return false;            // missing -> retry / false bırak
+      if(orig.__rtw){ RT.wrapped[name] = true; return true; }  // zaten sarılı
+      var w = function(){
+        var t0 = hit(name, counterKey);
+        var ret;
+        try{ ret = orig.apply(this, arguments); }
+        catch(e){ dur(name, t0); throw e; }                    // sync throw korunur
+        if(ret && typeof ret.then === 'function'){
+          try{ ret.then(function(){ dur(name, t0); }, function(){ dur(name, t0); }); }catch(e){}
+        } else { dur(name, t0); }
+        return ret;                                            // orijinal dönüş (aynı promise) korunur
+      };
+      w.__rtw = true; w.__rtorig = orig;
+      window[name] = w;
+      RT.wrapped[name] = true;
+      return true;
+    }catch(e){ RT.error = RT.error || 'WRAP_FAILED'; try{console.warn('RT_AUDIT WRAP_FAILED', name, e);}catch(e2){} return false; }
+  }
+
+  /* UTL.mutate.single — yalnız sayım/timing; sonuç ve davranış DEĞİŞMEZ */
+  function wrapUTL(){
+    try{
+      if(!(window.UTL && window.UTL.mutate && typeof window.UTL.mutate.single === 'function')) return false;
+      var orig = window.UTL.mutate.single;
+      if(orig.__rtw){ RT.wrapped.UTLMutateSingle = true; return true; }
+      var w = function(){
+        var t0 = hit('UTLMutateSingle', 'mutationRefreshes');
+        var ret;
+        try{ ret = orig.apply(this, arguments); }
+        catch(e){ dur('UTLMutateSingle', t0); throw e; }
+        if(ret && typeof ret.then === 'function'){
+          try{ ret.then(function(){ dur('UTLMutateSingle', t0); }, function(){ dur('UTLMutateSingle', t0); }); }catch(e){}
+        } else { dur('UTLMutateSingle', t0); }
+        return ret;
+      };
+      w.__rtw = true; w.__rtorig = orig;
+      window.UTL.mutate.single = w;
+      RT.wrapped.UTLMutateSingle = true;
+      return true;
+    }catch(e){ RT.error = RT.error || 'WRAP_FAILED'; try{console.warn('RT_AUDIT WRAP_FAILED UTL', e);}catch(e2){} return false; }
+  }
+
+  var RENDERS = ['renderSiparis','renderUretim','renderPanel','refreshSohbetBadge'];
+  function passRenders(){
+    var all = true;
+    for(var i=0;i<RENDERS.length;i++){
+      if(!RT.wrapped[RENDERS[i]]){ if(!wrapGlobal(RENDERS[i], RENDERS[i])) all = false; }
+    }
+    return all;
+  }
+
+  function startReady(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
+
+  startReady(function(){
+    /* ilk senkron deneme: index.html fonksiyon bildirimleri zaten mevcut */
+    passRenders();
+    wrapUTL();
+
+    /* kalanlar için sınırlı arkaplan denemesi (UTL artık utl.js loader-fix ile mevcut) */
+    var tries = 40; // ~10s @250ms
+    var iv = setInterval(function(){
+      tries--;
+      var rOk = passRenders();
+      var uOk = RT.wrapped.UTLMutateSingle || wrapUTL();
+      if((rOk && uOk) || tries<=0){
+        clearInterval(iv);
+        if(!RT.wrapped.UTLMutateSingle){ RT.error = RT.error || 'UTL_MISSING'; } // utl.js gerçekten yüklenemediyse
+      }
+    }, 250);
+
+    try{ console.log('RT_AUDIT_READY version='+SVER); }catch(e){}
+  });
 })();
