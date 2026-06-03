@@ -317,5 +317,24 @@
   window.UB={ close:close, toggle:toggle, selGroup:selGroup, clearSel:clearSel, run:run };
 })();
 
-/* === index_bridge.js yükleyici (Phase 4B.1) === */
-(function(){ try{ if(document.querySelector('script[data-ib]')) return; var s=document.createElement('script'); s.src='index_bridge.js'; s.setAttribute('data-ib','1'); document.body.appendChild(s); }catch(e){} })();
+/* === UTL + index_bridge.js yükleyici (PRE-4B.5R: utl.js index_bridge'den ÖNCE) ===
+   index.html runtime'da window.UTL yoktu -> index_bridge override'ları kurulamıyordu (UTL_MISSING).
+   Fix: index_bridge.js'i ancak utl.js yüklendikten SONRA enjekte et. Sıra garanti, double-load guard'lı.
+   utl.js client() mevcut sayfa 'sb'sini paylaşır (auth/RLS regresyonu yok). rapor.html bu yoldan etkilenmez. */
+(function(){
+  try{
+    if(document.querySelector('script[data-ib]')) return;           // index_bridge zaten kuyrukta/yüklü
+    function loadIB(){
+      if(document.querySelector('script[data-ib]')) return;         // çift enjeksiyon guard
+      var b=document.createElement('script'); b.src='index_bridge.js'; b.setAttribute('data-ib','1'); document.body.appendChild(b);
+    }
+    if(window.UTL && window.UTL.mutate){ loadIB(); return; }         // UTL zaten varsa direkt IB
+    var existing=document.querySelector('script[data-utl]');         // utl.js zaten enjekte edildiyse onload'ını bekle
+    if(existing){ existing.addEventListener('load',loadIB); existing.addEventListener('error',loadIB); return; }
+    var u=document.createElement('script'); u.src='utl.js'; u.setAttribute('data-utl','1');
+    u.onload=loadIB; u.onerror=loadIB;                              // utl.js düşse bile IB yine yüklenir (eski UTL_MISSING davranışı korunur; regresyon yok)
+    document.body.appendChild(u);
+  }catch(e){
+    try{ if(!document.querySelector('script[data-ib]')){ var b=document.createElement('script'); b.src='index_bridge.js'; b.setAttribute('data-ib','1'); document.body.appendChild(b); } }catch(e2){}
+  }
+})();
