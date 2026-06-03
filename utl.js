@@ -5,6 +5,10 @@
 (function(global){
   'use strict';
 
+  /* PRE-4B.5R double-load guard: utl.js artık hem rapor.html hem index runtime companion-loader'ından gelebilir.
+     İkinci yükleme yeni client/cache state yaratmasın, mevcut UTL'yi koru. */
+  if(global.UTL && global.__UTL_LOADED){ try{ console.warn('UTL double-load ignored'); }catch(e){} return; }
+
   var SUPABASE_URL = 'https://kfpgqqjmkutjzdmzkwaa.supabase.co';
   var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtmcGdxcWpta3V0anpkbXprd2FhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTk2NzcsImV4cCI6MjA5NTE5NTY3N30.Y1ov7w7eDIJfzHYFeWPuU3D8fVMj3uMhXHB18y7Nfbs';
 
@@ -195,4 +199,5 @@
   }
 
   global.UTL = UTL;
+  global.__UTL_LOADED = true;   // PRE-4B.5R: guard bayrağı
 })(window);
