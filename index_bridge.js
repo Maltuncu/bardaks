@@ -1,7 +1,8 @@
-/* Bardaks ERP — index_bridge.js  [Phase 4B.1 + 4B.2 + 4B.4 + 4B.5R2 diagnostics + RT_AUDIT sentinel]
+/* Bardaks ERP — index_bridge.js  [Phase 4B.1 + 4B.2 + 4B.4 + 4B.5R2 diagnostics + RT_AUDIT sentinel + 4B.5B1A observe]
    - durumIlerlet + durumDegistir WRITE-path -> UTL.mutate.single (apply_batch_transition, N=1). TAM REPLACEMENT, double-write yok.
    - 4B.4 Undo: son batch için admin/müdür'e "↩ Geri Al" (revert_last_operation). Optimistic YOK. İmalathane göremez.
    - 4B.5R2: IB_STATUS error semantics ayrıştırıldı (UTL_MISSING / SB_MISSING / BRIDGE_FN_MISSING / CURRENT_MISSING + AUTH_PENDING) + RT_AUDIT telemetry sentinel.
+   - 4B.5B1A: realtime consolidation OBSERVE-ONLY router (render/invalidate/mutation YOK; sadece ölçüm).
    - READ path eski; realtime'a dokunulmaz. index.html'e dokunulmaz. */
 (function(){
   'use strict';
@@ -267,4 +268,116 @@
 
     try{ console.log('RT_AUDIT_READY version='+SVER); }catch(e){}
   });
+})();
+
+/* ============================================================
+   Phase 4B.5B1A — Realtime Consolidation OBSERVE-ONLY Router (ADDITIVE)
+   Companion-only. RENDER ETMEZ · INVALIDATE ETMEZ · MUTATE ETMEZ — yalnız ölçüm.
+   Mevcut legacy realtime (siparis-rt / ub-uretim-rt) AYNEN çalışır; bu sadece gözlemler.
+   NOT: UTL.subscribe onChange payload'suz/coalesced olduğundan (utl.js event metadata iletmez),
+        per-tablo sınıflandırma için özel observe-only kanal kullanılır (utl-rt ile aynı 4 tablo).
+   ============================================================ */
+(function(){
+  'use strict';
+  var CVER = '4B.5B1A';
+  window.RT_CONSOLIDATE = window.RT_CONSOLIDATE || 'observe';
+
+  if(window.__RTC_LOADED){ if(window.RT_CONSOLIDATE_STATUS){ window.RT_CONSOLIDATE_STATUS.error = window.RT_CONSOLIDATE_STATUS.error || 'DOUBLE_LOAD'; } return; }
+  window.__RTC_LOADED = true;
+
+  var ST = {
+    loaded: true,
+    version: CVER,
+    mode: window.RT_CONSOLIDATE,
+    error: null,
+    subscribed: false,
+    method: 'dedicated-observe-channel',
+    utlSubscribeAvailable: !!(window.UTL && typeof window.UTL.subscribe === 'function'),
+    events: 0,
+    plannedInvalidations: 0,
+    lastEvent: null,
+    duplicateCandidateCount: 0
+  };
+  window.RT_CONSOLIDATE_STATUS = ST;
+
+  try{ if(window.RT_AUDIT){ window.RT_AUDIT.consolidated = window.RT_AUDIT.consolidated || { observeEvents:0, recent:[] }; } }catch(e){}
+
+  var recent = [];
+  var lastByTarget = {};
+  var DUP_MS = 400;
+
+  function nowMs(){ return (window.performance && performance.now) ? performance.now() : Date.now(); }
+
+  function classify(table){
+    if(table==='siparisler') return 'orders';
+    if(table==='siparis_kalemleri') return 'order_items';
+    if(table==='tahsilatlar') return 'finance';
+    if(table==='expenses') return 'finance';
+    return 'unknown';
+  }
+  function plannedTarget(){
+    try{
+      function active(id){ var el=document.getElementById(id); return !!(el && el.classList.contains('active')); }
+      if(active('page-uretim')) return 'renderUretim/loadActive';
+      if(active('page-siparis')) return 'renderSiparis';
+      if(active('page-panel'))  return 'renderPanel';
+    }catch(e){}
+    return 'none';
+  }
+  function plannedInvalidation(domain){
+    if(domain==='orders')      return ['orders','items','aggregates'];
+    if(domain==='order_items') return ['items','aggregates'];
+    if(domain==='finance')     return ['financial','aggregates'];
+    return [];
+  }
+
+  /* observe-only kayıt: HİÇBİR render/invalidate/mutation yok */
+  function record(table, eventType, idVal){
+    if(window.RT_CONSOLIDATE === 'off') return;   // kill switch: olayları yok say
+    ST.mode = window.RT_CONSOLIDATE;
+    var domain = classify(table);
+    var target = plannedTarget();
+    var inval  = plannedInvalidation(domain);
+    var t = nowMs();
+    if(target!=='none' && lastByTarget[target] && (t - lastByTarget[target]) <= DUP_MS){ ST.duplicateCandidateCount++; }
+    lastByTarget[target] = t;
+
+    ST.events++;
+    if(inval.length) ST.plannedInvalidations++;
+    ST.lastEvent = { ts:new Date().toISOString(), table:table, domain:domain, eventType:eventType, plannedTarget:target, plannedInvalidation:inval, id:(idVal||null) };
+    recent.push(ST.lastEvent); if(recent.length>20) recent.shift();
+    try{ if(window.RT_AUDIT && window.RT_AUDIT.consolidated){ window.RT_AUDIT.consolidated.observeEvents++; window.RT_AUDIT.consolidated.recent = recent; } }catch(e){}
+  }
+
+  function pickId(p){ try{ return (p && ((p.new && p.new.id) || (p.old && p.old.id))) || null; }catch(e){ return null; } }
+
+  var observeCh = null;
+  function subscribeObserve(){
+    try{
+      if(typeof sb==='undefined' || !sb || !sb.channel){ ST.error = ST.error || 'SB_MISSING'; return; }
+      if(observeCh){ ST.subscribed = true; return; }   // çift abonelik guard
+      var TABLES = ['siparisler','siparis_kalemleri','tahsilatlar','expenses'];
+      var ch = sb.channel('rtc-observe-rt');
+      TABLES.forEach(function(tbl){
+        ch = ch.on('postgres_changes', {event:'*', schema:'public', table:tbl}, function(payload){
+          try{ record(tbl, (payload && payload.eventType) || '*', pickId(payload)); }catch(e){}
+        });
+      });
+      ch.subscribe();
+      observeCh = ch;
+      ST.subscribed = true;
+    }catch(e){ ST.error = ST.error || 'SUBSCRIBE_FAILED'; ST.subscribed = false; }
+  }
+
+  /* kill switch */
+  window.RT_CONSOLIDATE_DISABLE = function(){ window.RT_CONSOLIDATE='off'; ST.mode='off'; return ST.mode; };
+  window.RT_CONSOLIDATE_ENABLE_OBSERVE = function(){ window.RT_CONSOLIDATE='observe'; ST.mode='observe'; return ST.mode; };
+
+  function ready(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded',fn); }
+  function waitSb(n){
+    if(typeof sb!=='undefined' && sb && sb.channel){ subscribeObserve(); return; }
+    if(n<=0){ ST.error = ST.error || 'SB_MISSING'; return; }
+    setTimeout(function(){ waitSb(n-1); }, 250);
+  }
+  ready(function(){ waitSb(120); try{ console.log('RT_CONSOLIDATE_READY mode=observe version='+CVER); }catch(e){} });
 })();
