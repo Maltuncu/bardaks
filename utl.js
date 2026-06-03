@@ -111,7 +111,8 @@
       return { firma_id:firmaId, orders:orders, byDurum:byDurum, financial:agg };
     },
     getReportView: async function(filter){
-      return { daily:await UTL.aggregates.daily(filter), firm:await UTL.aggregates.firm(filter), financial:await UTL.aggregates.financial(filter) };
+      return { daily:await UTL.aggregates.daily(filter), firm:await UTL.aggregates.firm(filter),
+               financial:await UTL.aggregates.financial(filter), urun:await UTL.aggregates.urun(filter) };
     },
 
     /* ---- aggregates: live RPC (DB) + snapshot adapter merge ---- */
@@ -134,7 +135,11 @@
           if(c){ var r=await c.rpc('rapor_financial',rpcArgs(filter)); if(r.data&&r.data[0]) base=r.data[0]; }
           applyFilter(snapshotOrders(),filter).forEach(function(o){ base.ciro_haric=Number(base.ciro_haric)+o.kdv_haric; base.ciro_dahil=Number(base.ciro_dahil)+o.kdv_dahil; });
           return base;
-        }); }
+        }); },
+      urun: function(filter){ var key='agg:urun:'+JSON.stringify(filter||{});
+        return cached(key,12000,['aggregates'],async function(){ var c=client(); if(!c) return []; var r=await c.rpc('rapor_urun',rpcArgs(filter)); return r.data||[]; }); },
+      urunGun: function(filter){ var key='agg:urungun:'+JSON.stringify(filter||{});
+        return cached(key,12000,['aggregates'],async function(){ var c=client(); if(!c) return []; var r=await c.rpc('rapor_urun_gun',rpcArgs(filter)); return r.data||[]; }); }
     },
 
     /* ---- mutations: TEK giriş = apply_batch_transition (bulk + tek + undo) ---- */
