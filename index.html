@@ -712,8 +712,8 @@ async function openFirmaDetay(fid){
   const f=FIRMALAR.find(function(x){return x.id===fid;})||{};
   const fiyatlar=FIYATLAR.filter(function(p){return p.firma_id===fid;});
   const tanimliUrunIds = fiyatlar.map(function(p){return p.urun_id;});
-  const eklenebilir = URUNLER.filter(function(u){return tanimliUrunIds.indexOf(u.id)<0;});
-  openModal('<div class="modal-head"><h3>'+f.ad+'</h3><button class="modal-close" onclick="closeModal()">×</button></div><div style="font-size:13px;color:var(--text-dim);margin-bottom:14px">'+(f.resmi_unvan||'')+' '+(f.vergi_no?'· VKN: '+f.vergi_no:'')+'<br>'+(f.yetkili_kisi?'👤 '+f.yetkili_kisi:'')+' '+(f.telefon?'· 📞 '+f.telefon:'')+'<br>Ödeme: '+f.odeme_tipi+' · Vade: '+f.vade_gun+' gün</div><div class="card-title">Bu Firmaya Tanımlı Ürünler & Fiyatlar</div><div class="table-wrap"><table><tr><th>Ürün</th><th>Fiyat (Hariç)</th><th></th></tr>'+(fiyatlar.map(function(p){return '<tr><td>'+p.urun_ad+'</td><td>'+TL(p.birim_fiyat_kdv_haric)+'</td><td style="text-align:right"><button class="btn btn-sec btn-sm" onclick="fiyatGuncelle(\''+fid+'\',\''+p.urun_id+'\',\''+p.urun_ad.replace(/'/g,"")+'\','+p.birim_fiyat_kdv_haric+')">✏️</button> <button class="btn btn-sec btn-sm" onclick="urunCikar(\''+fid+'\',\''+p.urun_id+'\',\''+p.urun_ad.replace(/'/g,"")+'\')">🗑️</button></td></tr>';}).join('')||'<tr><td colspan=3 class="empty">Ürün yok</td></tr>')+'</table></div><div class="mt"><label>Ürün Ekle</label><div class="row"><select id="feUrun" style="flex:3" onchange="feFiyatDoldur()">'+eklenebilir.map(function(u){return '<option value="'+u.id+'" data-fiyat="'+(u.varsayilan_fiyat||'')+'">'+u.ad+(u.varsayilan_fiyat?' ('+u.varsayilan_fiyat+'₺)':'')+'</option>';}).join('')+'</select><input type="number" id="feFiyat" placeholder="Fiyat" style="flex:1.5"><button class="btn" style="flex:1" onclick="urunEkle(\''+fid+'\')">Ekle</button></div><div style="font-size:11px;color:var(--text-dim);margin-top:4px">Fiyat üründen otomatik gelir, bu firmaya özel değiştirebilirsin.</div></div>');
+  const eklenebilir = URUNLER.filter(function(u){return tanimliUrunIds.indexOf(u.id)<0 && u.satis_urunu!==false && !u.is_deleted;});
+  openModal('<div class="modal-head"><h3>'+f.ad+'</h3><button class="modal-close" onclick="closeModal()">×</button></div><div style="font-size:13px;color:var(--text-dim);margin-bottom:14px">'+(f.resmi_unvan||'')+' '+(f.vergi_no?'· VKN: '+f.vergi_no:'')+'<br>'+(f.yetkili_kisi?'👤 '+f.yetkili_kisi:'')+' '+(f.telefon?'· 📞 '+f.telefon:'')+'<br>Ödeme: '+f.odeme_tipi+' · Vade: '+f.vade_gun+' gün</div><div class="card-title">Bu Firmanın Sattığı Ürünler & Fiyatları (katalog)</div><div class="table-wrap"><table><tr><th>Ürün</th><th>Fiyat (Hariç)</th><th></th></tr>'+(fiyatlar.map(function(p){return '<tr><td>'+p.urun_ad+'</td><td>'+TL(p.birim_fiyat_kdv_haric)+'</td><td style="text-align:right"><button class="btn btn-sec btn-sm" onclick="fiyatGuncelle(\''+fid+'\',\''+p.urun_id+'\',\''+p.urun_ad.replace(/'/g,"")+'\','+p.birim_fiyat_kdv_haric+')">✏️</button> <button class="btn btn-sec btn-sm" onclick="urunCikar(\''+fid+'\',\''+p.urun_id+'\',\''+p.urun_ad.replace(/'/g,"")+'\')">🗑️</button></td></tr>';}).join('')||'<tr><td colspan=3 class="empty">Ürün yok</td></tr>')+'</table></div><div class="mt"><label>Firmaya Ürün Ekle</label><div class="row"><select id="feUrun" style="flex:3" onchange="feFiyatDoldur()">'+eklenebilir.map(function(u){return '<option value="'+u.id+'" data-fiyat="'+(u.varsayilan_fiyat||'')+'">'+u.ad+(u.varsayilan_fiyat?' ('+u.varsayilan_fiyat+'₺)':'')+'</option>';}).join('')+'</select><input type="number" id="feFiyat" placeholder="Fiyat" style="flex:1.5"><button class="btn" style="flex:1" onclick="urunEkle(\''+fid+'\')">Ekle</button></div><div style="font-size:11px;color:var(--text-dim);margin-top:4px">Fiyat üründen otomatik gelir, bu firmaya özel değiştirebilirsin.</div></div>');
   feFiyatDoldur();
 }
 function feFiyatDoldur(){
@@ -734,10 +734,10 @@ async function urunEkle(fid){
   await loadCoreData(); openFirmaDetay(fid);
 }
 async function urunCikar(fid,uid,ad){
-  if(!confirm(ad+' bu firmadan çıkarılsın mı?')) return;
+  if(!confirm(ad+' bu firmada satılmıyor olarak işaretlensin mi? (Fiyat kaldırılır, veri silinmez, geçmiş korunur)')) return;
   await sb.from('firma_urun_fiyat').update({gecerlilik_bitis:today()}).eq('firma_id',fid).eq('urun_id',uid).is('gecerlilik_bitis',null);
   await sb.from('firma_urun_log').insert({firma_id:fid,urun_id:uid,islem:'cikarildi',yapan:CURRENT.ad_soyad});
-  toast('🗑️ Ürün çıkarıldı','');
+  toast('Fiyatı kaldırıldı','Bu firmada satılmıyor');
   await loadCoreData(); openFirmaDetay(fid);
 }
 function fiyatGuncelle(fid,uid,ad,eski){
