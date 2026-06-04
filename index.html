@@ -402,7 +402,7 @@ async function renderPanel(){
   const borcList=Object.keys(firmaBorc).map(function(fid){return {ad:(FIRMALAR.find(function(f){return f.id===fid;})||{}).ad||'?',fid:fid,borc:firmaBorc[fid]};}).filter(function(x){return x.borc>1;}).sort(function(a,b){return b.borc-a.borc;});
   const ayAd = new Date().toLocaleDateString('tr-TR',{month:'long'});
   let h = '<h1 class="page-title">Merhaba '+CURRENT.ad_soyad.split(' ')[0]+' 👋</h1><div class="page-desc">'+ayAd+' ayı · net kâr odaklı</div>';
-  const eksikMaliyet = URUNLER.filter(function(u){return !Number(u.birim_maliyet);}).length;
+  const eksikMaliyet = URUNLER.filter(function(u){return u.satis_urunu!==false && !Number(u.birim_maliyet);}).length;
   if(eksikMaliyet>0){ h += '<div class="card" style="border-color:var(--red)"><div style="font-weight:700;color:var(--red)">⚠️ '+eksikMaliyet+' üründe maliyet eksik</div><div style="font-size:12px;color:var(--text-dim);margin:4px 0 9px">Maliyeti girilmeyen ürünlerde kâr=tam ciro sayılıyor, net kâr olduğundan yüksek görünüyor. Maliyetleri gir, rakamlar gerçeğe otursun (geçmiş siparişler otomatik düzelir).</div><button class="btn btn-sm" onclick="openMaliyetEksik()">💰 Maliyetleri Gir</button></div>'; }
   h += '<div class="stats"><div class="stat"><div class="stat-label">'+ayAd+' Net Kâr</div><div class="stat-value" style="color:var('+(netKar>=0?'--green':'--red')+')">'+TL(netKar)+'</div></div><div class="stat"><div class="stat-label">Tahsilat Oranı</div><div class="stat-value" style="color:var('+(tahsilatOrani>=70?'--green':'--accent')+')">%'+tahsilatOrani+'</div></div></div>';
   h += '<div class="stats"><div class="stat"><div class="stat-label">Tahsil Edilmemiş Alacak</div><div class="stat-value" style="color:var(--red)">'+TL(toplamAcik)+'</div></div><div class="stat"><div class="stat-label">Vadesi Geçmiş</div><div class="stat-value" style="color:var(--red)">'+TL(gecmisBorc)+'</div></div></div>';
@@ -430,7 +430,7 @@ async function kaydetGider(){
 }
 let maliyetGirisi=[];
 function openMaliyetEksik(){
-  const eksik = URUNLER.filter(function(u){return !Number(u.birim_maliyet);});
+  const eksik = URUNLER.filter(function(u){return u.satis_urunu!==false && !Number(u.birim_maliyet);});
   if(!eksik.length){ toast('Tüm ürünlerde maliyet var 🎉',''); return; }
   maliyetGirisi = eksik.map(function(u){return {id:u.id, ad:u.ad, maliyet:0};});
   let h = '<div class="modal-head"><h3>💰 Eksik Maliyetler ('+eksik.length+')</h3><button class="modal-close" onclick="closeModal()">×</button></div><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Birim maliyet gir (₺). Boş/0 bıraktığın ürün atlanır, sonra girebilirsin.</div><div style="max-height:50vh;overflow-y:auto">';
