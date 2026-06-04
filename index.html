@@ -478,7 +478,7 @@ function ysLoadUrunler(){
   ysSatirlar = fiyatlar.map(function(p){return {urun_id:p.urun_id, ad:p.urun_ad, fiyat:p.birim_fiyat_kdv_haric, kdv:p.kdv_orani, adet:0};});
   const c = document.getElementById('ysUrunler');
   if(!ysSatirlar.length){ c.innerHTML='<div class="empty">Bu firmaya tanımlı ürün yok. Önce Firmalar ekranından ürün ekle.</div>'; return; }
-  c.innerHTML = '<label>Ürünler (adet gir)</label>' + ysSatirlar.map(function(s,i){return '<div class="flex-between" style="padding:8px 0; border-bottom:1px solid var(--border)"><div><div>'+s.ad+'</div><div style="font-size:12px;color:var(--text-dim)">'+TL(s.fiyat)+'/birim</div></div><input type="number" min="0" style="width:80px; text-align:center" value="0" oninput="ysSatirlar['+i+'].adet=Number(this.value)||0; ysHesap()"></div>';}).join('');
+  c.innerHTML = '<label>Ürünler (adet gir)</label>' + ysSatirlar.map(function(s,i){return '<div class="flex-between" style="padding:8px 0; border-bottom:1px solid var(--border)"><div><div>'+s.ad+'</div><div style="font-size:12px;color:var(--text-dim)">'+TL(s.fiyat*(1+(s.kdv||1)/100))+'/birim (KDV dahil)</div></div><input type="number" min="0" style="width:80px; text-align:center" value="0" oninput="ysSatirlar['+i+'].adet=Number(this.value)||0; ysHesap()"></div>';}).join('');
   ysHesap();
 }
 function ysHesap(){
@@ -632,9 +632,9 @@ async function openSiparisLog(sid){
 let duzenleKalemler=[];
 async function siparisDuzenle(sid){
   const rk = await sb.from('siparis_kalemleri').select('*').eq('siparis_id',sid).eq('is_deleted',false);
-  duzenleKalemler = (rk.data||[]).map(function(k){return {id:k.id, ad:k.urun_ad, fiyat:k.birim_fiyat_kdv_haric, adet:Number(k.adet)};});
+  duzenleKalemler = (rk.data||[]).map(function(k){return {id:k.id, ad:k.urun_ad, fiyat:k.birim_fiyat_kdv_haric, kdv:k.kdv_orani, adet:Number(k.adet)};});
   let h = '<div class="modal-head"><h3>✏️ Sipariş Düzenle</h3><button class="modal-close" onclick="closeModal()">×</button></div><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Adetleri güncelle. 0 yaparsan o kalem çıkar.</div>';
-  h += duzenleKalemler.map(function(k,i){return '<div class="flex-between" style="padding:8px 0;border-bottom:1px solid var(--border)"><div>'+k.ad+'<div style="font-size:12px;color:var(--text-dim)">'+TL(k.fiyat)+'/birim</div></div><input type="number" min="0" style="width:80px;text-align:center" value="'+k.adet+'" oninput="duzenleKalemler['+i+'].adet=Number(this.value)||0"></div>';}).join('');
+  h += duzenleKalemler.map(function(k,i){return '<div class="flex-between" style="padding:8px 0;border-bottom:1px solid var(--border)"><div>'+k.ad+'<div style="font-size:12px;color:var(--text-dim)">'+TL(k.fiyat*(1+(k.kdv||1)/100))+'/birim (KDV dahil)</div></div><input type="number" min="0" style="width:80px;text-align:center" value="'+k.adet+'" oninput="duzenleKalemler['+i+'].adet=Number(this.value)||0"></div>';}).join('');
   h += '<button class="btn btn-block mt" onclick="siparisDuzenleKaydet(\''+sid+'\')">Kaydet</button>';
   openModal(h);
 }
