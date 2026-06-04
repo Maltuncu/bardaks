@@ -172,8 +172,8 @@ async function renderFiyat(){
   else fiyatlar.forEach(p=>{
     const uid=p.urun_id;
     const hist=logMap[uid]||[];
-    h+='<div class="fl-row"><div><div style="font-weight:600">'+p.urun_ad+'</div><div style="font-size:11px;color:var(--dm)">KDV %'+(p.kdv_orani||1)+' · KDV dahil: '+TL(p.birim_fiyat_kdv_dahil||p.birim_fiyat_kdv_haric*(1+(p.kdv_orani||1)/100))+'</div></div>'
-      +'<div style="display:flex;align-items:center;gap:8px"><b style="color:var(--ac);font-size:16px">'+TL(p.birim_fiyat_kdv_haric)+'</b>'
+    h+='<div class="fl-row"><div><div style="font-weight:600">'+p.urun_ad+'</div><div style="font-size:11px;color:var(--dm)">KDV %'+(p.kdv_orani||1)+' · hariç: '+TL(p.birim_fiyat_kdv_haric)+'</div></div>'
+      +'<div style="display:flex;align-items:center;gap:8px"><b style="color:var(--ac);font-size:16px">'+TL(p.birim_fiyat_kdv_dahil||p.birim_fiyat_kdv_haric*(1+(p.kdv_orani||1)/100))+'</b>'
       +'<button class="b s" style="padding:5px 10px;font-size:12px" onclick="editPrice(\''+p.id+'\',\''+uid+'\',\''+p.urun_ad.replace(/'/g,"\\'")+'\','+p.birim_fiyat_kdv_haric+','+(p.kdv_orani||1)+')">✏️</button>'
       +'<button class="b s" style="padding:5px 10px;font-size:12px;color:var(--rd)" onclick="urunKaldir(\''+p.id+'\',\''+uid+'\',\''+p.urun_ad.replace(/'/g,"\\'")+'\')">Kaldır</button></div></div>';
     // Fiyat geçmişi
@@ -194,9 +194,10 @@ async function renderFiyat(){
 
 function editPrice(fufId,urunId,ad,fiy,kdv){
   const bugun=new Date().toISOString().slice(0,10);
+  const dahil=+(fiy*(1+kdv/100)).toFixed(2);
   let h='<div class="mp-h"><h3>✏️ '+ad+'</h3><button class="mp-x" onclick="closeMo()">✕</button></div>';
-  h+='<div style="padding:10px;background:var(--s2);border-radius:8px;margin-bottom:10px;font-size:13px">Mevcut: <b>'+TL(fiy)+'</b> +%'+kdv+' KDV = <b>'+TL(fiy*(1+kdv/100))+'</b></div>';
-  h+='<label>Yeni Birim Fiyat (KDV Hariç)</label><input type="number" step="0.01" id="epFiy" value="'+fiy+'">';
+  h+='<div style="padding:10px;background:var(--s2);border-radius:8px;margin-bottom:10px;font-size:13px">Mevcut (KDV dahil): <b>'+TL(dahil)+'</b> · KDV %'+kdv+' · hariç '+TL(fiy)+'</div>';
+  h+='<label>Yeni Fiyat (KDV Dahil)</label><input type="number" step="0.01" id="epFiy" value="'+dahil+'">';
   h+='<label>KDV Oranı %</label><input type="number" id="epKdv" value="'+kdv+'">';
   h+='<label>Değişim Tarihi</label><input type="date" id="epTar" value="'+bugun+'">';
   h+='<button class="b full" style="margin-top:12px" onclick="savePrice(\''+fufId+'\',\''+urunId+'\','+fiy+')">Güncelle</button>';
@@ -204,8 +205,10 @@ function editPrice(fufId,urunId,ad,fiy,kdv){
 }
 
 async function savePrice(fufId,urunId,eskiFiy){
-  const yeni=parseFloat(document.getElementById('epFiy').value);
-  if(!(yeni>0)){alert('Geçerli fiyat gir');return;}
+  const kdv=parseFloat(document.getElementById('epKdv').value)||1;
+  const dahil=parseFloat(document.getElementById('epFiy').value);
+  if(!(dahil>0)){alert('Geçerli fiyat gir (KDV dahil, 0/negatif olamaz)');return;}
+  const yeni=+(dahil/(1+kdv/100)).toFixed(2); // DB'ye KDV hariç saklanır
   const tar=document.getElementById('epTar').value||new Date().toISOString().slice(0,10);
   // Versiyonlama: eski aktif kaydı kapat (gecerlilik_bitis), yeni satır insert et (hard-delete yok)
   const e1=await sb.from('firma_urun_fiyat').update({gecerlilik_bitis:tar}).eq('id',fufId);
@@ -213,7 +216,8 @@ async function savePrice(fufId,urunId,eskiFiy){
   const e2=await sb.from('firma_urun_fiyat').insert({firma_id:cF,urun_id:urunId,birim_fiyat_kdv_haric:yeni,gecerlilik_baslangic:tar});
   if(e2.error){alert(e2.error.message);return;}
   if(Math.abs(yeni-eskiFiy)>0.001){
-    await sb.from('firma_urun_log').insert({firma_id:cF,urun_id:urunId,islem:'guncellendi',eski_fiyat:eskiFiy,yeni_fiyat:yeni,yapan:'Firma Yönetim'}).catch(()=>{});
+    const eskiDahil=+(eskiFiy*(1+kdv/100)).toFixed(2);
+    await sb.from('firma_urun_log').insert({firma_id:cF,urun_id:urunId,islem:'fiyat_degisti',eski_fiyat:eskiDahil,yeni_fiyat:dahil,yapan:'Firma Yönetim'}).catch(()=>{});
   }
   await reloadData();closeMo();renderFiyat();
 }
@@ -232,22 +236,25 @@ function showAddPrice(){
   const defBas=(new Date().getFullYear()-1)+'-01-01';
   area.innerHTML='<div class="add-pnl"><div class="ttl">➕ Firmaya Ürün Ekle (katalogdan)</div>'
     +'<label>Katalogdan Ürün Seç</label><select id="apSel" onchange="apFill()"><option value="">— Ürün seç —</option>'+urunOpts+'</select>'
-    +'<div style="display:flex;gap:8px"><div style="flex:1"><label>Birim Fiyat (KDV Hariç)</label><input type="number" step="0.01" id="apFiy"></div>'
+    +'<div style="display:flex;gap:8px"><div style="flex:1"><label>Fiyat (KDV Dahil)</label><input type="number" step="0.01" id="apFiy"></div>'
     +'<div style="width:80px"><label>KDV %</label><input type="number" id="apKdv" value="1"></div></div>'
     +'<label>Geçerlilik Başlangıç</label><input type="date" id="apBas" value="'+defBas+'">'
     +'<div style="display:flex;gap:8px;margin-top:10px"><button class="b" style="flex:1" onclick="doAddPrice()">Ekle</button><button class="b s" style="flex:1" onclick="document.getElementById(\'addPriceArea\').innerHTML=\'\'">İptal</button></div></div>';
 }
 function apFill(){const s=document.getElementById('apSel');if(!s||!s.value)return;const o=s.options[s.selectedIndex];
-  document.getElementById('apFiy').value=o.getAttribute('data-fiy')||'';document.getElementById('apKdv').value=o.getAttribute('data-kdv')||'1';}
+  const kdv=parseFloat(o.getAttribute('data-kdv'))||1;const haric=parseFloat(o.getAttribute('data-fiy'))||0;
+  document.getElementById('apFiy').value=haric?(+(haric*(1+kdv/100)).toFixed(2)):'';document.getElementById('apKdv').value=kdv;}
 async function doAddPrice(){
   const sel=document.getElementById('apSel');const uid=sel&&sel.value?sel.value:null;
   if(!uid){alert('Katalogdan ürün seç');return;}
-  const fiy=parseFloat(document.getElementById('apFiy').value);
-  if(!(fiy>0)){alert('Geçerli fiyat gir (0/negatif olamaz)');return;}
+  const kdv=parseFloat(document.getElementById('apKdv').value)||1;
+  const dahil=parseFloat(document.getElementById('apFiy').value);
+  if(!(dahil>0)){alert('Geçerli fiyat gir (KDV dahil, 0/negatif olamaz)');return;}
+  const fiy=+(dahil/(1+kdv/100)).toFixed(2); // DB'ye KDV hariç saklanır
   const bas=document.getElementById('apBas').value||new Date().toISOString().slice(0,10);
   const{error}=await sb.from('firma_urun_fiyat').insert({firma_id:cF,urun_id:uid,birim_fiyat_kdv_haric:fiy,gecerlilik_baslangic:bas});
   if(error){alert(error.message);return;}
-  await sb.from('firma_urun_log').insert({firma_id:cF,urun_id:uid,islem:'eklendi',eski_fiyat:null,yeni_fiyat:fiy,yapan:'Firma Yönetim'}).catch(()=>{});
+  await sb.from('firma_urun_log').insert({firma_id:cF,urun_id:uid,islem:'eklendi',eski_fiyat:null,yeni_fiyat:dahil,yapan:'Firma Yönetim'}).catch(()=>{});
   await reloadData();renderFiyat();
 }
 

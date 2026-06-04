@@ -757,12 +757,14 @@ async function openFirmaFiyatToplu(fid){
   const pmap={}; FIYATLAR.filter(function(p){return p.firma_id===fid;}).forEach(function(p){ pmap[p.urun_id]=p.birim_fiyat_kdv_haric; });
   const urunler=URUNLER.filter(function(u){return u.satis_urunu!==false && !u.is_deleted;}).sort(function(a,b){return (a.ad||'').localeCompare(b.ad||'','tr');});
   const rows=urunler.map(function(u){
-    const cur = (pmap[u.id]!==undefined && pmap[u.id]!==null) ? pmap[u.id] : '';
-    const bilgi = escapeHtml(u.birim||'adet')+(u.gramaj?' · '+escapeHtml(u.gramaj):'');
+    const kdv = Number(u.kdv_orani)||1;
+    const curH = (pmap[u.id]!==undefined && pmap[u.id]!==null) ? pmap[u.id] : null;
+    const cur = curH!==null ? (Math.round(curH*(1+kdv/100)*100)/100) : '';
+    const bilgi = escapeHtml(u.birim||'adet')+(u.gramaj?' · '+escapeHtml(u.gramaj):'')+' · KDV %'+kdv;
     const mrozet = !Number(u.birim_maliyet) ? ' <span class="tag tag-dim" style="font-size:9px;padding:1px 5px">maliyet ?</span>' : '';
     return '<tr><td><div style="font-weight:600">'+escapeHtml(u.ad)+mrozet+'</div><div style="font-size:11px;color:var(--text-dim)">'+bilgi+'</div></td><td style="text-align:right;width:115px"><input type="number" min="0" step="0.01" id="tf-'+u.id+'" value="'+cur+'" placeholder="—" style="width:100px;text-align:right"></td></tr>';
   }).join('');
-  openModal('<div class="modal-head"><h3>💰 '+escapeHtml(f.ad)+' · Toplu Fiyat</h3><button class="modal-close" onclick="closeModal()">×</button></div><div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Fiyatlar KDV <strong>hariç</strong>. Boş = bu firmada satılmıyor. 0/negatif kabul edilmez. ('+urunler.length+' satılabilir ürün)</div><div class="table-wrap" style="max-height:55vh;overflow-y:auto"><table><tr><th>Ürün</th><th style="text-align:right">Fiyat (hariç)</th></tr>'+rows+'</table></div><button class="btn btn-block mt" onclick="flTopluKaydet(\''+fid+'\')">Kaydet</button>');
+  openModal('<div class="modal-head"><h3>💰 '+escapeHtml(f.ad)+' · Toplu Fiyat</h3><button class="modal-close" onclick="closeModal()">×</button></div><div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Fiyatlar KDV <strong>dahil</strong> girilir. Boş = bu firmada satılmıyor. 0/negatif kabul edilmez. ('+urunler.length+' satılabilir ürün)</div><div class="table-wrap" style="max-height:55vh;overflow-y:auto"><table><tr><th>Ürün</th><th style="text-align:right">Fiyat (KDV dahil)</th></tr>'+rows+'</table></div><button class="btn btn-block mt" onclick="flTopluKaydet(\''+fid+'\')">Kaydet</button>');
 }
 async function flTopluKaydet(fid){
   const pmap={}; FIYATLAR.filter(function(p){return p.firma_id===fid;}).forEach(function(p){ pmap[p.urun_id]=Number(p.birim_fiyat_kdv_haric); });
@@ -770,23 +772,26 @@ async function flTopluKaydet(fid){
   let degisen=0, kaldirilan=0, atlanan=0;
   for(let i=0;i<urunler.length;i++){
     const u=urunler[i]; const inp=document.getElementById('tf-'+u.id); if(!inp) continue;
+    const kdv=Number(u.kdv_orani)||1;
     const raw=(inp.value||'').trim();
     const eski = (pmap[u.id]!==undefined && pmap[u.id]!==null) ? pmap[u.id] : null;
+    const eskiDahil = eski!==null ? Math.round(eski*(1+kdv/100)*100)/100 : null;
     if(raw===''){
       if(eski!==null){
         await sb.from('firma_urun_fiyat').update({gecerlilik_bitis:today()}).eq('firma_id',fid).eq('urun_id',u.id).is('gecerlilik_bitis',null);
-        await sb.from('firma_urun_log').insert({firma_id:fid,urun_id:u.id,islem:'cikarildi',eski_fiyat:eski,yapan:CURRENT.ad_soyad});
+        await sb.from('firma_urun_log').insert({firma_id:fid,urun_id:u.id,islem:'cikarildi',eski_fiyat:eskiDahil,yapan:CURRENT.ad_soyad});
         kaldirilan++;
       }
       continue;
     }
-    const yeni=Number(raw);
-    if(!(yeni>0)){ atlanan++; continue; }
+    const dahil=Number(raw);
+    if(!(dahil>0)){ atlanan++; continue; }
+    const yeni=Math.round(dahil/(1+kdv/100)*100)/100; // DB'ye KDV hariç saklanır
     if(eski!==null && eski.toFixed(2)===yeni.toFixed(2)) continue;
     if(eski!==null){ await sb.from('firma_urun_fiyat').update({gecerlilik_bitis:today()}).eq('firma_id',fid).eq('urun_id',u.id).is('gecerlilik_bitis',null); }
     const ins=await sb.from('firma_urun_fiyat').insert({firma_id:fid,urun_id:u.id,birim_fiyat_kdv_haric:yeni,olusturan_id:CURRENT.id});
     if(ins.error){ atlanan++; continue; }
-    await sb.from('firma_urun_log').insert({firma_id:fid,urun_id:u.id,islem:(eski!==null?'fiyat_degisti':'eklendi'),eski_fiyat:eski,yeni_fiyat:yeni,yapan:CURRENT.ad_soyad});
+    await sb.from('firma_urun_log').insert({firma_id:fid,urun_id:u.id,islem:(eski!==null?'fiyat_degisti':'eklendi'),eski_fiyat:eskiDahil,yeni_fiyat:dahil,yapan:CURRENT.ad_soyad});
     degisen++;
   }
   toast('✅ Fiyatlar kaydedildi', degisen+' güncel · '+kaldirilan+' kaldırıldı'+(atlanan?' · '+atlanan+' atlandı':''));
