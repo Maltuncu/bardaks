@@ -656,10 +656,10 @@ async function faturaKes(firmaId){
 }
 async function faturaOnizle(firmaId){
   const bas=document.getElementById('fkBas').value, bit=document.getElementById('fkBit').value;
-  const rsp = await sb.from('siparisler').select('id').eq('firma_id',firmaId).gte('tarih',bas).lte('tarih',bit).in('durum',['hazir','faturalandi']).eq('kilitli',false);
+  const rsp = await sb.from('siparisler').select('id').eq('firma_id',firmaId).gte('tarih',bas).lte('tarih',bit).in('durum',['hazir','faturalandi']).eq('kilitli',false).eq('is_deleted',false);
   if(!rsp.data || !rsp.data.length){ alert('Bu aralıkta faturalanacak (hazır) sipariş yok'); return; }
   const ids = rsp.data.map(function(s){return s.id;});
-  const rk = await sb.from('siparis_kalemleri').select('*').in('siparis_id',ids);
+  const rk = await sb.from('siparis_kalemleri').select('*').in('siparis_id',ids).eq('is_deleted',false);
   const top={};
   (rk.data||[]).forEach(function(k){
     if(!top[k.urun_ad]) top[k.urun_ad]={adet:0,haric:0,kdv:0,dahil:0};
@@ -762,11 +762,11 @@ async function renderAnaliz(){
   else if(analizDonem==='ay'){ bas=new Date(bugun.getFullYear(),bugun.getMonth(),1); }
   else { bas=new Date(bugun.getFullYear(),0,1); }
   const basStr=bas.toISOString().slice(0,10);
-  const rsp = await sb.from('siparisler').select('id,firma_id,toplam_kdv_dahil,tarih').gte('tarih',basStr).neq('durum','iptal');
+  const rsp = await sb.from('siparisler').select('id,firma_id,toplam_kdv_dahil,tarih').gte('tarih',basStr).neq('durum','iptal').eq('is_deleted',false);
   const sips=rsp.data;
   const ids=(sips||[]).map(function(s){return s.id;});
   let kalemler=[];
-  if(ids.length){ const r=await sb.from('siparis_kalemleri').select('urun_ad,adet,toplam_kdv_dahil,siparis_id').in('siparis_id',ids); kalemler=r.data||[]; }
+  if(ids.length){ const r=await sb.from('siparis_kalemleri').select('urun_ad,adet,toplam_kdv_dahil,siparis_id').in('siparis_id',ids).eq('is_deleted',false); kalemler=r.data||[]; }
   const firmaCiro={};
   (sips||[]).forEach(function(s){ const ad=(FIRMALAR.find(function(f){return f.id===s.firma_id;})||{}).ad||'?'; firmaCiro[ad]=(firmaCiro[ad]||0)+Number(s.toplam_kdv_dahil||0); });
   const firmaList=Object.keys(firmaCiro).map(function(k){return [k,firmaCiro[k]];}).sort(function(a,b){return b[1]-a[1];});
@@ -1054,7 +1054,7 @@ async function renderTakvim(){
 
   el.innerHTML = '<div class="flex-between mb"><h1 class="page-title">Siparişler</h1><div class="row" style="gap:6px"><button class="btn btn-sec btn-sm" onclick="siparisGorunum=\'liste\';renderSiparis()">📋 Liste</button><button class="btn btn-sec btn-sm" onclick="openYeniSiparis()">+ Yeni</button></div></div><div class="card"><div class="flex-between mb"><button class="btn btn-sec btn-sm" onclick="takvimAyDegistir(-1)">← Önceki</button><strong style="font-size:16px">'+aylar[m]+' '+y+'</strong><button class="btn btn-sec btn-sm" onclick="takvimAyDegistir(1)">Sonraki →</button></div><div class="takvim" id="takvimGrid"><div class="loading" style="grid-column:span 7">Yükleniyor...</div></div></div>';
 
-  const r = await sb.from('siparisler').select('id,firma_id,tarih,toplam_kdv_dahil,durum').gte('tarih',basStr).lte('tarih',bitStr).neq('durum','iptal');
+  const r = await sb.from('siparisler').select('id,firma_id,tarih,toplam_kdv_dahil,durum').gte('tarih',basStr).lte('tarih',bitStr).neq('durum','iptal').eq('is_deleted',false);
   const sips = r.data || [];
   const gunMap = {};
   sips.forEach(function(s){
@@ -1088,7 +1088,7 @@ function takvimAyDegistir(yon){
 }
 
 async function acGunDetay(tarih){
-  const r = await sb.from('siparisler').select('*').eq('tarih',tarih).order('siparis_no');
+  const r = await sb.from('siparisler').select('*').eq('tarih',tarih).eq('is_deleted',false).order('siparis_no');
   const sips = r.data || [];
   let html = '<div class="modal-head"><h3>📅 '+trDate(tarih)+'</h3><button class="modal-close" onclick="closeModal()">×</button></div>';
   if(!sips.length){
