@@ -1111,7 +1111,7 @@ const KAT_SIRA = ['cup','pasta','kruvasan','magnolia','diger'];
 async function renderUrunler(){
   const el = document.getElementById('page-urunler');
   el.innerHTML = '<div class="flex-between mb"><h1 class="page-title">🍰 Ürünler</h1><div class="row" style="gap:6px">'+(CURRENT.rol!=='imalathane'?'<button class="btn" style="background:#25D366" onclick="openFiyatListesi()">📄 Fiyat Listesi</button>':'')+'<button class="btn btn-sec" onclick="openYeniUrun()">+ Yeni Ürün</button></div></div><div class="page-desc">Merkezi ürün kataloğu · Firmalara buradan ürün eklenir</div><div id="urunlerList"><div class="loading">Yükleniyor...</div></div>';
-  const r = await sb.from('urunler').select('*').eq('aktif',true).order('ad');
+  const r = await sb.from('urunler').select('*').eq('is_deleted',false).order('ad');
   const urunler = r.data || [];
   const list = document.getElementById('urunlerList');
   if(!urunler.length){ list.innerHTML='<div class="empty"><div class="empty-ico">🍰</div>Henüz ürün yok</div>'; return; }
@@ -1125,7 +1125,11 @@ async function renderUrunler(){
       const foto = u.gorsel_url ? '<img src="'+u.gorsel_url+'" alt="'+escapeHtml(u.ad)+'">' : '🍰';
       const fiyat = u.varsayilan_fiyat ? TL(u.varsayilan_fiyat) : '<span style="color:var(--text-dim);font-weight:400">fiyat yok</span>';
       const gramaj = u.gramaj ? '<span class="urun-meta">'+escapeHtml(u.gramaj)+'</span>' : '';
-      html += '<div class="urun-kart"><div class="urun-foto" id="foto-'+u.id+'">'+foto+'<button class="foto-btn" onclick="secFoto(\''+u.id+'\')">📷 '+(u.gorsel_url?'Değiştir':'Foto')+'</button></div><div class="urun-body"><div class="urun-ad">'+escapeHtml(u.ad)+'</div>'+gramaj+'<div class="urun-fiyat">'+fiyat+'</div></div><div class="urun-actions"><button class="btn btn-sec btn-sm" onclick="openUrunDuzenle(\''+u.id+'\')">✏️ Düzenle</button></div></div>';
+      const rozet = (u.aktif===false?'<span class="tag tag-red" style="margin-left:4px">Pasif</span>':'')+(u.satis_urunu===false?'<span class="tag tag-dim" style="margin-left:4px">Yarı mamul</span>':'');
+      const birimTxt = escapeHtml(u.birim||'adet');
+      const maliyetTxt = Number(u.birim_maliyet)>0 ? 'Maliyet '+TL(u.birim_maliyet) : '<span style="color:var(--red)">maliyet yok</span>';
+      const eklenme = u.olusturma ? 'Eklendi: '+trDate(u.olusturma) : '';
+      html += '<div class="urun-kart"'+(u.aktif===false?' style="opacity:.6"':'')+'><div class="urun-foto" id="foto-'+u.id+'">'+foto+'<button class="foto-btn" onclick="secFoto(\''+u.id+'\')">📷 '+(u.gorsel_url?'Değiştir':'Foto')+'</button></div><div class="urun-body"><div class="urun-ad">'+escapeHtml(u.ad)+rozet+'</div>'+gramaj+'<div class="urun-fiyat">'+fiyat+'</div><div class="urun-meta">'+birimTxt+' · '+maliyetTxt+'</div>'+(eklenme?'<div class="urun-meta" style="font-size:11px">'+eklenme+'</div>':'')+'</div><div class="urun-actions"><button class="btn btn-sec btn-sm" onclick="openUrunDuzenle(\''+u.id+'\')">✏️ Düzenle</button></div></div>';
     });
     html += '</div>';
   });
@@ -1185,7 +1189,7 @@ function optimizeImage(file, maxW, quality){
 }
 
 function openYeniUrun(){
-  openModal('<div class="modal-head"><h3>Yeni Ürün</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Ürün Adı *</label><input id="nuAd" placeholder="örn: Lotus Cup"><label>Kategori *</label><select id="nuKat"><option value="cup">Cup</option><option value="pasta">Pasta</option><option value="kruvasan">Kruvasan</option><option value="magnolia">Magnolia</option><option value="diger">Diğer</option></select><div class="row"><div><label>Varsayılan Fiyat (KDV hariç)</label><input type="number" id="nuFiyat" placeholder="örn: 95"></div><div><label>Gramaj</label><input id="nuGramaj" placeholder="örn: 200gr"></div></div><label>KDV Oranı (%)</label><input type="number" id="nuKdv" value="1"><button class="btn btn-block mt" onclick="kaydetUrun()">Ürünü Ekle</button><div style="font-size:12px;color:var(--text-dim);margin-top:8px">Görseli ekledikten sonra karttan 📷 ile yükleyebilirsin.</div>');
+  openModal('<div class="modal-head"><h3>Yeni Ürün</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Ürün Adı *</label><input id="nuAd" placeholder="örn: Lotus Cup"><label>Kategori *</label><select id="nuKat"><option value="cup">Cup</option><option value="pasta">Pasta</option><option value="kruvasan">Kruvasan</option><option value="magnolia">Magnolia</option><option value="diger">Diğer</option></select><div class="row"><div><label>Satış Birimi</label><input id="nuBirim" value="adet" placeholder="adet / kg / gr / tepsi"></div><div><label>Gramaj</label><input id="nuGramaj" placeholder="örn: 200gr"></div></div><div class="row"><div><label>Varsayılan Fiyat (KDV hariç)</label><input type="number" id="nuFiyat" placeholder="örn: 95"></div><div><label>Birim Maliyet (₺)</label><input type="number" id="nuMaliyet" placeholder="0"></div></div><label>KDV Oranı (%)</label><input type="number" id="nuKdv" value="1"><label>Üretim Notu</label><textarea id="nuNotlar" placeholder="opsiyonel"></textarea><label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer"><input type="checkbox" id="nuSatis" checked style="width:auto;margin:0"><span>Satış ürünü (müşteriye satılır — kapalıysa yarı mamul/malzeme, siparişte görünmez)</span></label><label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer"><input type="checkbox" id="nuAktif" checked style="width:auto;margin:0"><span>Aktif</span></label><button class="btn btn-block mt" onclick="kaydetUrun()">Ürünü Ekle</button><div style="font-size:12px;color:var(--text-dim);margin-top:8px">Görseli ekledikten sonra karttan 📷 ile yükleyebilirsin.</div>');
 }
 async function kaydetUrun(){
   const ad = document.getElementById('nuAd').value.trim();
@@ -1194,9 +1198,15 @@ async function kaydetUrun(){
   const fiyat = document.getElementById('nuFiyat').value;
   const gramaj = document.getElementById('nuGramaj').value.trim();
   const kdv = document.getElementById('nuKdv').value;
-  const rec = { ad:ad, kategori:kat, aktif:true, kdv_orani:Number(kdv)||1 };
+  const birim = (document.getElementById('nuBirim').value||'adet').trim();
+  const maliyet = document.getElementById('nuMaliyet').value;
+  const notlar = document.getElementById('nuNotlar').value.trim();
+  const satisUrunu = document.getElementById('nuSatis').checked;
+  const aktif = document.getElementById('nuAktif').checked;
+  const rec = { ad:ad, kategori:kat, aktif:aktif, satis_urunu:satisUrunu, birim:birim||'adet', kdv_orani:Number(kdv)||1, birim_maliyet:Number(maliyet)||0 };
   if(fiyat) rec.varsayilan_fiyat = Number(fiyat);
   if(gramaj) rec.gramaj = gramaj;
+  if(notlar) rec.notlar = notlar;
   const r = await sb.from('urunler').insert(rec);
   if(r.error){ alert('Hata: '+r.error.message); return; }
   closeModal(); toast('✅ Ürün eklendi',ad); renderUrunler();
@@ -1206,19 +1216,25 @@ async function openUrunDuzenle(urunId){
   const r = await sb.from('urunler').select('*').eq('id',urunId).single();
   const u = r.data; if(!u) return;
   const katOpts = ['cup','pasta','kruvasan','magnolia','diger'].map(function(k){return '<option value="'+k+'"'+(u.kategori===k?' selected':'')+'>'+(KAT_ETIKET[k]||k).replace(/^.. /,'')+'</option>';}).join('');
-  openModal('<div class="modal-head"><h3>✏️ '+escapeHtml(u.ad)+'</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Ürün Adı</label><input id="duAd" value="'+escapeHtml(u.ad)+'"><label>Kategori</label><select id="duKat">'+katOpts+'</select><div class="row"><div><label>Varsayılan Fiyat (KDV hariç)</label><input type="number" id="duFiyat" value="'+(u.varsayilan_fiyat||'')+'"></div><div><label>Gramaj</label><input id="duGramaj" value="'+(u.gramaj||'')+'"></div></div><label>KDV Oranı (%)</label><input type="number" id="duKdv" value="'+(u.kdv_orani||1)+'"><div class="row mt"><button class="btn" style="flex:2" onclick="kaydetUrunDuzenle(\''+urunId+'\')">Kaydet</button><button class="btn btn-danger" style="flex:1" onclick="silUrun(\''+urunId+'\',\''+escapeHtml(u.ad).replace(/'/g,"")+'\')">Sil</button></div>');
+  openModal('<div class="modal-head"><h3>✏️ '+escapeHtml(u.ad)+'</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Ürün Adı</label><input id="duAd" value="'+escapeHtml(u.ad)+'"><label>Kategori</label><select id="duKat">'+katOpts+'</select><div class="row"><div><label>Satış Birimi</label><input id="duBirim" value="'+escapeHtml(u.birim||'adet')+'"></div><div><label>Gramaj</label><input id="duGramaj" value="'+(u.gramaj||'')+'"></div></div><div class="row"><div><label>Varsayılan Fiyat (KDV hariç)</label><input type="number" id="duFiyat" value="'+(u.varsayilan_fiyat||'')+'"></div><div><label>Birim Maliyet (₺)</label><input type="number" id="duMaliyet" value="'+(u.birim_maliyet||0)+'"></div></div><label>KDV Oranı (%)</label><input type="number" id="duKdv" value="'+(u.kdv_orani||1)+'"><label>Üretim Notu</label><textarea id="duNotlar">'+escapeHtml(u.notlar||'')+'</textarea><label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer"><input type="checkbox" id="duSatis" '+(u.satis_urunu!==false?'checked':'')+' style="width:auto;margin:0"><span>Satış ürünü (kapalıysa siparişte görünmez)</span></label><label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer"><input type="checkbox" id="duAktif" '+(u.aktif!==false?'checked':'')+' style="width:auto;margin:0"><span>Aktif</span></label><div class="row mt"><button class="btn" style="flex:2" onclick="kaydetUrunDuzenle(\''+urunId+'\')">Kaydet</button><button class="btn btn-danger" style="flex:1" onclick="silUrun(\''+urunId+'\',\''+escapeHtml(u.ad).replace(/'/g,"")+'\')">Satıştan kaldır</button></div>');
 }
 async function kaydetUrunDuzenle(urunId){
   const rec = {
     ad: document.getElementById('duAd').value.trim(),
     kategori: document.getElementById('duKat').value,
     kdv_orani: Number(document.getElementById('duKdv').value)||1,
+    birim: (document.getElementById('duBirim').value||'adet').trim()||'adet',
+    birim_maliyet: Number(document.getElementById('duMaliyet').value)||0,
+    satis_urunu: document.getElementById('duSatis').checked,
+    aktif: document.getElementById('duAktif').checked,
     guncelleme: new Date().toISOString()
   };
   const fiyat = document.getElementById('duFiyat').value;
   const gramaj = document.getElementById('duGramaj').value.trim();
+  const notlar = document.getElementById('duNotlar').value.trim();
   rec.varsayilan_fiyat = fiyat ? Number(fiyat) : null;
   rec.gramaj = gramaj || null;
+  rec.notlar = notlar || null;
   if(!rec.ad){ alert('Ürün adı zorunlu'); return; }
   const r = await sb.from('urunler').update(rec).eq('id',urunId);
   if(r.error){ alert('Hata: '+r.error.message); return; }
@@ -1344,9 +1360,9 @@ async function flPaylas(){
   }, 'image/png');
 }
 async function silUrun(urunId, ad){
-  if(!confirm(ad+' ürünü pasif yapılsın mı? (Firmalardaki kayıtlar etkilenmez)')) return;
-  await sb.from('urunler').update({aktif:false}).eq('id',urunId);
-  closeModal(); toast('🗑️ Ürün kaldırıldı',''); renderUrunler();
+  if(!confirm(ad+' satıştan kaldırılsın (pasifleştirilsin) mi? (Veri silinmez, firma fiyatları korunur)')) return;
+  await sb.from('urunler').update({aktif:false, guncelleme:new Date().toISOString()}).eq('id',urunId);
+  closeModal(); toast('Satıştan kaldırıldı (pasif)', ad); renderUrunler();
 }
 </script>
 <script src="netkar_banka.js"></script>
