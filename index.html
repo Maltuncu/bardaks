@@ -859,14 +859,35 @@ async function kaydetOzet(){
 async function openTahsilat(firmaId){
   const f=FIRMALAR.find(function(x){return x.id===firmaId;})||{};
   const ayar = await getAyar('cek_aylik_iskonto');
-  openModal('<div class="modal-head"><h3>💰 Tahsilat · '+f.ad+'</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Tutar (₺)</label><input type="number" id="thTutar" oninput="thHesap()"><label>Ödeme Tipi</label><select id="thTip" onchange="thTipChange()"><option value="havale">Havale</option><option value="nakit">Nakit</option><option value="kredi_karti">Kredi Kartı</option><option value="cek">Çek</option></select><div id="thKart" class="hidden"><label>POS Komisyon Oranı (%)</label><input type="number" id="thKomisyon" step="0.1" placeholder="örn 1.8" oninput="thHesap()"></div><div id="thCek" class="hidden"><label>Çek Vade Tarihi</label><input type="date" id="thVade" oninput="thHesap()"><div style="font-size:12px;color:var(--text-dim);margin-top:4px">Aylık iskonto: %'+ayar+'</div></div><label>Hangi aya ait? (opsiyonel)</label><input id="thAy" placeholder="örn 2026-05"><label>Açıklama</label><input id="thAciklamaTxt"><div id="thOzet" class="mt" style="background:var(--surface2);padding:12px;border-radius:9px;font-size:13px"></div><button class="btn btn-block mt" onclick="kaydetTahsilat(\''+firmaId+'\')">Tahsilatı Kaydet</button>');
+  window._thAccounts = await loadTahsilatHesaplari();
+  openModal('<div class="modal-head"><h3>💰 Tahsilat · '+escapeHtml(f.ad)+'</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Tarih</label><input type="date" id="thTarih" value="'+today()+'"><label>Brüt Tahsilat (₺)</label><input type="number" id="thTutar" oninput="thHesap()"><label>Ödeme Tipi</label><select id="thTip" onchange="thTipChange()"><option value="havale">Havale</option><option value="nakit">Nakit</option><option value="kredi_karti">Kredi Kartı / POS</option><option value="cek">Çek</option></select><label>Hesap</label><select id="thAccount" onchange="thHesap()">'+thHesapOptions('havale')+'</select><label>Valör / Hesaba Geçiş Tarihi</label><input type="date" id="thValor" value="'+today()+'"><div id="thKart" class="hidden"><label>POS Komisyon Oranı (%)</label><input type="number" id="thKomisyon" step="0.1" placeholder="örn 1.8" oninput="thHesap()"></div><div id="thCek" class="hidden"><label>Çek No</label><input id="thCekNo"><label>Çek Vade Tarihi</label><input type="date" id="thVade" oninput="thHesap()"><div style="font-size:12px;color:var(--text-dim);margin-top:4px">Aylık iskonto: %'+ayar+'</div></div><label>Dekont / Belge Referansı</label><input id="thDekont" placeholder="dosya adı veya dekont no"><label>Hangi aya ait? (opsiyonel)</label><input id="thAy" placeholder="örn 2026-05"><label>Açıklama</label><input id="thAciklamaTxt"><div id="thOzet" class="mt" style="background:var(--surface2);padding:12px;border-radius:9px;font-size:13px"></div><button class="btn btn-block mt" id="thSaveBtn" onclick="kaydetTahsilat(\''+firmaId+'\')">Tahsilatı Kaydet</button><div class="card mt"><div class="card-title">Son Tahsilatlar</div><div id="thGecmis"><div class="loading">Yükleniyor...</div></div></div>');
   window._cekIskonto=Number(ayar)||3.5;
   thHesap();
+  renderTahsilatListesi(firmaId);
+}
+async function loadTahsilatHesaplari(){
+  const r = await sb.from('hesap_bakiye').select('*').order('ad');
+  if(r.error){ toast('Hesaplar okunamadı', r.error.message); return []; }
+  return (r.data||[]).filter(function(h){return h.aktif!==false && h.is_deleted!==true;});
+}
+function thHesapTip(tip){
+  return {nakit:'kasa', havale:'banka', kredi_karti:'pos', cek:'banka'}[tip] || 'banka';
+}
+function thHesapOptions(tip){
+  const hesapTip = thHesapTip(tip);
+  const list = (window._thAccounts||[]).filter(function(h){return String(h.tip||'').toLowerCase()===hesapTip;});
+  if(!list.length) return '<option value="">Bu ödeme tipi için aktif '+hesapTip+' hesabı yok</option>';
+  return '<option value="">Hesap seç</option>'+list.map(function(h){
+    const bakiye = h.bakiye!=null ? ' · '+TL(h.bakiye) : '';
+    return '<option value="'+h.id+'">'+escapeHtml(h.ad)+' ('+escapeHtml(h.tip)+')'+bakiye+'</option>';
+  }).join('');
 }
 function thTipChange(){
   const tip=document.getElementById('thTip').value;
   document.getElementById('thKart').classList.toggle('hidden',tip!=='kredi_karti');
   document.getElementById('thCek').classList.toggle('hidden',tip!=='cek');
+  const hesap=document.getElementById('thAccount');
+  if(hesap) hesap.innerHTML=thHesapOptions(tip);
   thHesap();
 }
 function thHesap(){
@@ -886,25 +907,60 @@ function thHesap(){
       html='Çek tutarı: '+TL(tutar)+'<br>Vade: '+trDate(vade)+' (~'+Math.round(gun)+' gün)<br>Tahmini değer kaybı: -'+TL(kayip)+'<br><strong>Bugünkü reel değer: '+TL(tutar-kayip)+'</strong>';
     } else html='Çek tutarı: '+TL(tutar)+' · Vade tarihi gir';
   } else { html='<strong>Net ele geçen: '+TL(net)+'</strong>'; }
+  const hesap=document.getElementById('thAccount');
+  const hesapTxt=hesap && hesap.value ? hesap.options[hesap.selectedIndex].text : 'Hesap seçilmedi';
+  html += '<br><span style="color:var(--text-dim)">Hesap: '+escapeHtml(hesapTxt)+'</span>';
   document.getElementById('thOzet').innerHTML=html;
 }
 async function kaydetTahsilat(firmaId){
   const tutar=Number(document.getElementById('thTutar').value);
-  if(!tutar){ alert('Tutar gir'); return; }
+  if(!(tutar>0)){ toast('Tahsilat kaydedilemedi','Geçerli brüt tutar gir.'); return; }
   const tip=document.getElementById('thTip').value;
-  let rec={firma_id:firmaId, tutar:tutar, odeme_tipi:tip, ay_referans:val('thAy'), aciklama:val('thAciklamaTxt'), created_by:CURRENT.ad_soyad, giren_kullanici_id:CURRENT.id};
-  if(tip==='kredi_karti'){
-    const kom=Number(document.getElementById('thKomisyon').value)||0;
-    rec.komisyon_orani=kom; rec.komisyon_tutari=tutar*kom/100; rec.net_tahsil=tutar-rec.komisyon_tutari;
-  } else if(tip==='cek'){
-    const vade=document.getElementById('thVade').value;
-    rec.cek_vade_tarihi=vade||null;
-    if(vade){ const ay=Math.max(0,(new Date(vade)-new Date())/(1000*60*60*24))/30; rec.cek_deger_kaybi=tutar*(window._cekIskonto/100)*ay; }
-    rec.net_tahsil=tutar;
-  } else rec.net_tahsil=tutar;
-  const r=await sb.from('tahsilatlar').insert(rec);
-  if(r.error){ alert('Hata: '+r.error.message); return; }
+  const accountId=val('thAccount');
+  if(!accountId){ toast('Tahsilat kaydedilemedi','Ödeme tipine uygun aktif hesap seç.'); return; }
+  if(tip==='cek' && !val('thVade')){ toast('Tahsilat kaydedilemedi','Çek için vade tarihi gir.'); return; }
+  const btn=document.getElementById('thSaveBtn');
+  if(btn){ btn.disabled=true; btn.textContent='Kaydediliyor...'; }
+  const args={
+    p_firma:firmaId,
+    p_tarih:val('thTarih')||today(),
+    p_tutar:tutar,
+    p_odeme_tipi:tip,
+    p_account_id:accountId,
+    p_komisyon_orani:Number(document.getElementById('thKomisyon').value)||0,
+    p_cek_no:val('thCekNo')||null,
+    p_cek_vade:val('thVade')||null,
+    p_cek_durumu:null,
+    p_valor:val('thValor')||today(),
+    p_dekont:val('thDekont')||null,
+    p_ay_referans:val('thAy')||null,
+    p_aciklama:val('thAciklamaTxt')||null
+  };
+  const r=await sb.rpc('tahsilat_kaydet',args);
+  if(r.error){
+    if(btn){ btn.disabled=false; btn.textContent='Tahsilatı Kaydet'; }
+    toast('Tahsilat kaydedilemedi', r.error.message || 'RPC hata verdi.');
+    return;
+  }
   closeModal(); toast('✅ Tahsilat kaydedildi',TL(tutar)); renderPanel();
+}
+async function renderTahsilatListesi(firmaId){
+  const box=document.getElementById('thGecmis'); if(!box) return;
+  const r=await sb.from('tahsilatlar').select('id,tarih,tutar,odeme_tipi,account_id,net_tahsil,komisyon_tutari,cek_no,cek_vade_tarihi,aciklama').eq('firma_id',firmaId).eq('is_deleted',false).order('tarih',{ascending:false}).limit(10);
+  if(r.error){ box.innerHTML='<div style="font-size:12px;color:var(--red)">Tahsilat listesi okunamadı: '+escapeHtml(r.error.message)+'</div>'; return; }
+  if(!r.data || !r.data.length){ box.innerHTML='<div class="empty" style="padding:14px">Kayıt yok</div>'; return; }
+  box.innerHTML='<div class="table-wrap"><table>'+r.data.map(function(t){
+    const hesap=(window._thAccounts||[]).find(function(h){return h.id===t.account_id;});
+    return '<tr><td><strong>'+trDate(t.tarih||'')+'</strong><div style="font-size:11px;color:var(--text-dim)">'+escapeHtml(t.odeme_tipi||'')+(hesap?' · '+escapeHtml(hesap.ad):'')+'</div></td><td style="text-align:right"><strong>'+TL(t.tutar)+'</strong><div style="font-size:11px;color:var(--text-dim)">net '+TL(t.net_tahsil||t.tutar)+'</div></td><td style="text-align:right"><button class="btn btn-danger btn-sm" onclick="iptalTahsilat(\''+t.id+'\',\''+firmaId+'\')">İptal</button></td></tr>';
+  }).join('')+'</table></div>';
+}
+async function iptalTahsilat(id,firmaId){
+  if(!confirm('Bu tahsilat iptal edilsin mi? Cari ve hesap etkisi RPC ile geri alınacak.')) return;
+  const r=await sb.rpc('tahsilat_iptal',{p_tahsilat:id});
+  if(r.error){ toast('Tahsilat iptal edilemedi', r.error.message || 'RPC hata verdi.'); return; }
+  toast('Tahsilat iptal edildi','Finansal etki geri alındı.');
+  await renderTahsilatListesi(firmaId);
+  renderPanel();
 }
 async function refreshNotifs(){
   const r=await sb.from('bildirimler').select('*').eq('alici_rol',CURRENT.rol).eq('okundu',false);
