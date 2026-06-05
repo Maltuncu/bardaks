@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bardaks B2B Yönetim</title>
+<!-- LEGACY-1: Bu ekran kullanim disi. Acilir acilmaz guncel panele yonlendirilir; eski write yollari (Supabase + uygulama JS) yuklenmeden engellenir. -->
+<script>
+  (function(){
+    try{ window.stop && window.stop(); }catch(e){}
+    try{ document.write('<div style="font:16px/1.6 system-ui,Arial;padding:40px;color:#e8eaed;background:#0f1115;min-height:100vh">Bu eski ekran kapatildi. Guncel Bardaks B2B paneline yonlendiriliyorsunuz...</div>'); }catch(e){}
+    location.replace('index.html');
+  })();
+</script>
+<noscript><meta http-equiv="refresh" content="0; url=index.html"><div style="padding:40px;font:16px Arial">Bu eski ekran kapatildi. <a href="index.html">Guncel panele git</a>.</div></noscript>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
