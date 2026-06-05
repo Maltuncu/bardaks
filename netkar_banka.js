@@ -159,17 +159,16 @@
     var tip=(prompt('Tip: kasa / banka / pos','banka')||'').trim().toLowerCase();
     if(['kasa','banka','pos'].indexOf(tip)<0){ alert('Tip kasa/banka/pos olmalı'); return; }
     var acilis=parseFloat(prompt('Açılış bakiyesi (₺):','0'))||0;
-    var r=await sb.from('accounts').insert({ad:ad,tip:tip,acilis_bakiye:acilis,created_by:(CURRENT.ad_soyad||'')});
+    var r=await sb.rpc('hesap_ekle',{p_ad:ad,p_tip:tip,p_acilis:acilis});
     if(r.error){ alert('Hata: '+r.error.message); return; }
     notify('Hesap eklendi'); loadBanka();
   }
   async function addHar(accId,accAd){
-    var tip=(prompt('Hareket tipi: gelir / gider / tahsilat / odeme / transfer','tahsilat')||'').trim().toLowerCase();
-    if(['gelir','gider','transfer','tahsilat','odeme'].indexOf(tip)<0){ alert('Geçersiz tip'); return; }
+    var tip=(prompt('Hareket tipi: gelir / gider','gelir')||'').trim().toLowerCase();
+    if(['gelir','gider'].indexOf(tip)<0){ alert('Yalnız gelir/gider. Tahsilat için Tahsilat ekranını kullan.'); return; }
     var tutar=parseFloat(prompt('Tutar (₺):')); if(!(tutar>0)){ alert('Geçerli tutar gir'); return; }
     var acik=prompt('Açıklama (opsiyonel):','')||null;
-    var yon=(tip==='gelir'||tip==='tahsilat')?1:-1;
-    var r=await sb.from('financial_transactions').insert({account_id:accId,tip:tip,yon:yon,tutar:tutar,aciklama:acik,created_by:(CURRENT.ad_soyad||'')});
+    var r=await sb.rpc('fintx_kaydet',{p_account_id:accId,p_tip:tip,p_tutar:tutar,p_aciklama:acik});
     if(r.error){ alert('Hata: '+r.error.message); return; }
     notify('Hareket eklendi ('+accAd+')'); loadBanka();
   }
