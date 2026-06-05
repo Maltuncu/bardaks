@@ -376,7 +376,7 @@ async function renderPanel(){
   const r = await Promise.all([
     sb.from('cari_ozet').select('*'),
     sb.from('gecmis_aylik_ozet').select('firma_id, kalan_bakiye'),
-    sb.from('siparisler').select('id,firma_id,toplam_kdv_haric,toplam_kdv_dahil,tarih').gte('tarih',ayBasStr).neq('durum','iptal').eq('is_deleted',false),
+    sb.from('siparisler').select('id,firma_id,toplam_kdv_haric,toplam_kdv_dahil,tarih,brut_kar,net_kar').gte('tarih',ayBasStr).neq('durum','iptal').eq('is_deleted',false),
     sb.from('expenses').select('tutar').gte('tarih',ayBasStr).eq('is_deleted',false),
     sb.from('tahsilatlar').select('tutar,tarih').gte('tarih',ayBasStr).eq('is_deleted',false)
   ]);
@@ -385,17 +385,21 @@ async function renderPanel(){
   let kalemler=[];
   if(sipIds.length){ const rk = await sb.from('siparis_kalemleri').select('siparis_id,urun_id,adet').in('siparis_id',sipIds).eq('is_deleted',false); kalemler=rk.data||[]; }
   const sipFirma={}; sips.forEach(function(s){ sipFirma[s.id]=s.firma_id; });
-  let ayCiroHaric=0, ayCiroDahil=0; const firmaCiro={};
-  sips.forEach(function(s){ ayCiroHaric+=Number(s.toplam_kdv_haric||0); ayCiroDahil+=Number(s.toplam_kdv_dahil||0); firmaCiro[s.firma_id]=(firmaCiro[s.firma_id]||0)+Number(s.toplam_kdv_haric||0); });
-  let ayMaliyet=0; const firmaMaliyet={};
-  kalemler.forEach(function(k){ const m=Number(k.adet||0)*(maliyetMap[k.urun_id]||0); ayMaliyet+=m; const fid=sipFirma[k.siparis_id]; if(fid) firmaMaliyet[fid]=(firmaMaliyet[fid]||0)+m; });
+  let ayCiroHaric=0, ayCiroDahil=0, ayBrutKar=0, ayNetKar=0; const firmaCiro={}, firmaBrutKar={};
+  sips.forEach(function(s){ ayCiroHaric+=Number(s.toplam_kdv_haric||0); ayCiroDahil+=Number(s.toplam_kdv_dahil||0); firmaCiro[s.firma_id]=(firmaCiro[s.firma_id]||0)+Number(s.toplam_kdv_haric||0); ayBrutKar+=Number(s.brut_kar||0); ayNetKar+=Number(s.net_kar||0); firmaBrutKar[s.firma_id]=(firmaBrutKar[s.firma_id]||0)+Number(s.brut_kar||0); });
+  // SİMÜLASYON: bugünkü (live) maliyetle marj — ana finansal gerçek DEĞİL, yalnız gösterim
+  let ayMaliyetLive=0;
+  kalemler.forEach(function(k){ const m=Number(k.adet||0)*(maliyetMap[k.urun_id]||0); ayMaliyetLive+=m; });
   const ayGider=giderler.reduce(function(s,x){return s+Number(x.tutar||0);},0);
   const ayTahsil=tahsiller.reduce(function(s,x){return s+Number(x.tutar||0);},0);
-  const netKar = ayCiroHaric - ayMaliyet - ayGider;
+  const ayMaliyetSnap = ayCiroHaric - ayBrutKar;       // snapshot tabanlı ürün maliyeti (gösterim)
+  const ayEkMaliyet  = Math.max(0, ayBrutKar - ayNetKar); // sipariş ek maliyetleri (net_kar'a zaten düşülmüş)
+  const netKar = ayNetKar;                              // ANA net kâr = Σ siparisler.net_kar (snapshot operasyon net kârı; dönem giderleri AYRI)
+  const liveBrutKar = ayCiroHaric - ayMaliyetLive;      // simülasyon: bugünkü maliyetle brüt kâr
   let gecmisBorc=gecmis.reduce(function(s,x){return s+Number(x.kalan_bakiye||0);},0);
   let cariBorc=cari.reduce(function(s,x){return s+Number(x.kalan_bakiye||0);},0);
   let toplamAcik=gecmisBorc+cariBorc;
-  const firmaKar={}; Object.keys(firmaCiro).forEach(function(fid){ firmaKar[fid]=(firmaCiro[fid]||0)-(firmaMaliyet[fid]||0); });
+  const firmaKar={}; Object.keys(firmaBrutKar).forEach(function(fid){ firmaKar[fid]=Number(firmaBrutKar[fid]||0); });
   const enKarli = Object.keys(firmaKar).map(function(fid){return {ad:(FIRMALAR.find(function(f){return f.id===fid;})||{}).ad||'?',kar:firmaKar[fid]};}).sort(function(a,b){return b.kar-a.kar;})[0];
   const tahsilatOrani = ayCiroDahil>0 ? Math.round(ayTahsil/ayCiroDahil*100) : 0;
   const firmaBorc={}; gecmis.forEach(function(x){firmaBorc[x.firma_id]=(firmaBorc[x.firma_id]||0)+Number(x.kalan_bakiye||0);}); cari.forEach(function(x){firmaBorc[x.firma_id]=(firmaBorc[x.firma_id]||0)+Number(x.kalan_bakiye||0);});
@@ -403,10 +407,10 @@ async function renderPanel(){
   const ayAd = new Date().toLocaleDateString('tr-TR',{month:'long'});
   let h = '<h1 class="page-title">Merhaba '+CURRENT.ad_soyad.split(' ')[0]+' 👋</h1><div class="page-desc">'+ayAd+' ayı · net kâr odaklı</div>';
   const eksikMaliyet = URUNLER.filter(function(u){return u.satis_urunu!==false && !Number(u.birim_maliyet);}).length;
-  if(eksikMaliyet>0){ h += '<div class="card" style="border-color:var(--red)"><div style="font-weight:700;color:var(--red)">⚠️ '+eksikMaliyet+' üründe maliyet eksik</div><div style="font-size:12px;color:var(--text-dim);margin:4px 0 9px">Maliyeti girilmeyen ürünlerde kâr=tam ciro sayılıyor, net kâr olduğundan yüksek görünüyor. Maliyetleri gir, rakamlar gerçeğe otursun (geçmiş siparişler otomatik düzelir).</div><button class="btn btn-sm" onclick="openMaliyetEksik()">💰 Maliyetleri Gir</button></div>'; }
+  if(eksikMaliyet>0){ h += '<div class="card" style="border-color:var(--red)"><div style="font-weight:700;color:var(--red)">⚠️ '+eksikMaliyet+' üründe maliyet eksik</div><div style="font-size:12px;color:var(--text-dim);margin:4px 0 9px">Maliyeti girilmeyen ürünlerde brüt kâr ≈ tam ciro sayılıyor, kâr olduğundan yüksek görünür. Maliyeti gir; <b>yeni siparişler</b> doğru hesaplanır. Geçmiş siparişler satış anındaki maliyet snapshot’ıyla dondurulduğundan otomatik değişmez.</div><button class="btn btn-sm" onclick="openMaliyetEksik()">💰 Maliyetleri Gir</button></div>'; }
   h += '<div class="stats"><div class="stat"><div class="stat-label">'+ayAd+' Net Kâr</div><div class="stat-value" style="color:var('+(netKar>=0?'--green':'--red')+')">'+TL(netKar)+'</div></div><div class="stat"><div class="stat-label">Tahsilat Oranı</div><div class="stat-value" style="color:var('+(tahsilatOrani>=70?'--green':'--accent')+')">%'+tahsilatOrani+'</div></div></div>';
   h += '<div class="stats"><div class="stat"><div class="stat-label">Tahsil Edilmemiş Alacak</div><div class="stat-value" style="color:var(--red)">'+TL(toplamAcik)+'</div></div><div class="stat"><div class="stat-label">Vadesi Geçmiş</div><div class="stat-value" style="color:var(--red)">'+TL(gecmisBorc)+'</div></div></div>';
-  h += '<div class="card"><div class="card-title">📊 '+ayAd+' Kâr Özeti</div><div class="table-wrap"><table><tr><td>Ciro (KDV hariç)</td><td style="text-align:right;font-weight:700">'+TL(ayCiroHaric)+'</td></tr><tr><td>− Ürün Maliyeti</td><td style="text-align:right;color:var(--red)">'+TL(ayMaliyet)+'</td></tr><tr><td><strong>= Brüt Kâr</strong> <span style="color:var(--text-dim);font-size:11px">marj %'+(ayCiroHaric>0?Math.round((ayCiroHaric-ayMaliyet)/ayCiroHaric*100):0)+'</span></td><td style="text-align:right;font-weight:700">'+TL(ayCiroHaric-ayMaliyet)+'</td></tr><tr><td>− Giderler</td><td style="text-align:right;color:var(--red)">'+TL(ayGider)+'</td></tr><tr><td><strong>= Net Kâr</strong></td><td style="text-align:right;font-weight:700;color:var('+(netKar>=0?'--green':'--red')+')">'+TL(netKar)+'</td></tr></table></div>'+(ayMaliyet===0?'<div style="font-size:11px;color:var(--text-dim);margin-top:6px">⚠️ Ürün maliyetleri eksik — net kâr olduğundan yüksek görünebilir.</div>':'')+'</div>';
+  h += '<div class="card"><div class="card-title">📊 '+ayAd+' Kâr Özeti <span style="color:var(--text-dim);font-size:11px;font-weight:400">(satış anı maliyet snapshot)</span></div><div class="table-wrap"><table><tr><td>Ciro (KDV hariç)</td><td style="text-align:right;font-weight:700">'+TL(ayCiroHaric)+'</td></tr><tr><td>− Ürün Maliyeti</td><td style="text-align:right;color:var(--red)">'+TL(ayMaliyetSnap)+'</td></tr><tr><td><strong>= Brüt Kâr</strong> <span style="color:var(--text-dim);font-size:11px">marj %'+(ayCiroHaric>0?Math.round(ayBrutKar/ayCiroHaric*100):0)+'</span></td><td style="text-align:right;font-weight:700">'+TL(ayBrutKar)+'</td></tr><tr><td>− Sipariş Ek Maliyetleri</td><td style="text-align:right;color:var(--red)">'+TL(ayEkMaliyet)+'</td></tr><tr><td><strong>= Operasyon Net Kâr</strong></td><td style="text-align:right;font-weight:700;color:var('+(netKar>=0?'--green':'--red')+')">'+TL(netKar)+'</td></tr></table></div><div style="font-size:11px;color:var(--text-dim);margin-top:6px">Dönem giderleri (kira, maaş vb.) operasyon net kâra dahil değildir — ayrı izlenir: <b>'+TL(ayGider)+'</b></div>'+(eksikMaliyet>0?'<div style="font-size:11px;color:var(--red);margin-top:4px">⚠️ Maliyeti eksik ürünler kârı yüksek gösterebilir.</div>':'')+'<div style="font-size:11px;color:var(--text-dim);margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">🧪 <b>Bugünkü maliyetle marj (simülasyon)</b> — gerçek kâr değil, güncel maliyetle yeniden hesap: brüt <b>'+TL(liveBrutKar)+'</b> (marj %'+(ayCiroHaric>0?Math.round(liveBrutKar/ayCiroHaric*100):0)+')</div></div>';
   if(enKarli){ h += '<div class="card"><div class="card-title">🏆 En Kârlı Müşteri ('+ayAd+')</div><div class="flex-between"><strong>'+enKarli.ad+'</strong><span style="font-weight:700;color:var(--green)">'+TL(enKarli.kar)+' kâr</span></div></div>'; }
   h += '<div class="card"><div class="card-title">Firma Bazlı Açık Bakiye</div><div class="table-wrap"><table><tr><th>Firma</th><th style="text-align:right">Açık Bakiye</th><th></th></tr>';
   h += borcList.map(function(x){return '<tr><td>'+x.ad+'</td><td style="text-align:right;font-weight:700;color:var(--red)">'+TL(x.borc)+'</td><td style="text-align:right"><button class="btn btn-sec btn-sm" onclick="openTahsilat(\''+x.fid+'\')">Tahsilat</button></td></tr>';}).join('')||'<tr><td colspan=3 class="empty">Açık bakiye yok 🎉</td></tr>';
