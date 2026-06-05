@@ -316,7 +316,7 @@ function newSip(tarih){
 }
 function rNR(){
   const c=document.getElementById('nR');if(!c)return;
-  c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><label style="margin:0;font-weight:700">Ürünler</label><button class="b s" style="font-size:11px;padding:5px 10px" onclick="showNAdd()">➕ Listede yok</button></div>'
+  c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><label style="margin:0;font-weight:700">Ürünler</label><span style="font-size:11px;color:var(--dm)">Yalnız firma kataloğu</span></div>'
     +window._ns.map((s,i)=>'<div class="row"><div class="nm">'+s.ad+'<div class="pr">'+TL(s.f*(1+(s.k||1)/100))+'/br (KDV dahil)</div></div><input type="number" min="0" value="'+(s.a||0)+'" oninput="window._ns['+i+'].a=+this.value||0;cNT()"><button class="x" onclick="window._ns.splice('+i+',1);rNR()">✕</button></div>').join('');
   cNT();
 }
@@ -340,6 +340,7 @@ function naFill(){const s=document.getElementById('naSel');if(!s||!s.value)retur
   document.getElementById('naAd').value=o.getAttribute('data-ad')||'';document.getElementById('naFiy').value=haric?(+(haric*(1+kdv/100)).toFixed(2)):'';document.getElementById('naKdv').value=kdv;}
 function doNAdd(){
   const sel=document.getElementById('naSel');const uid=sel&&sel.value?sel.value:null;
+  if(!uid){alert('Yalnızca firma kataloğundaki ürünler siparişe eklenebilir');return;}
   const ad=(document.getElementById('naAd').value||'').trim();
   const dahil=parseFloat(document.getElementById('naFiy').value)||0;
   const k=parseFloat(document.getElementById('naKdv').value)||1;
@@ -352,6 +353,7 @@ function doNAdd(){
 }
 
 async function saveN(tarih){const dolu=window._ns.filter(s=>s.a>0);if(!dolu.length){alert('En az bir ürüne adet gir');return;}
+  if(dolu.some(s=>!s.uid)){alert('Yalnızca firma kataloğundaki ürünler siparişe eklenebilir (katalog dışı kalem engellendi)');return;}
   const{data:sip,error}=await sb.from('siparisler').insert({firma_id:cF,tarih,durum:'tamamlandi',fatura_durumu:'bekliyor',created_by:'Firma Yönetim'}).select().single();
   if(error){alert(error.message);return;}
   await sb.from('siparis_kalemleri').insert(dolu.map(s=>({siparis_id:sip.id,urun_id:s.uid,urun_ad:s.ad,adet:s.a,birim_fiyat_kdv_haric:s.f,kdv_orani:s.k})));
