@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>bardak's · Yönetim</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.106.2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   :root {
@@ -220,6 +220,60 @@ const SUPABASE_URL = 'https://kfpgqqjmkutjzdmzkwaa.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtmcGdxcWpta3V0anpkbXprd2FhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTk2NzcsImV4cCI6MjA5NTE5NTY3N30.Y1ov7w7eDIJfzHYFeWPuU3D8fVMj3uMhXHB18y7Nfbs';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ===== ŞİFRE SIFIRLAMA (RECOVERY) — guard + handler (AUTH-RESET-FLOW-3) =====
+var __recovery = (function(){
+  try{
+    var hash = location.hash || '';
+    var qs = new URLSearchParams(location.search || '');
+    if(/type=recovery/.test(hash)) return {mode:'hash'};
+    if(qs.get('token_hash') && qs.get('type')==='recovery') return {mode:'token_hash', token_hash:qs.get('token_hash')};
+    if(qs.get('code')) return {mode:'code', code:qs.get('code')};
+    return null;
+  }catch(e){ return null; }
+})();
+// Bu flag: index.html recovery'yi yönetiyor → netkar_banka çift ekran açmasın + DOMContentLoaded auto signOut/login atlasın
+window.__bardaksRecovery = !!__recovery;
+
+function showRecoveryUI(state, msg){
+  var login=document.getElementById('login'); if(login) login.style.display='flex';
+  var app=document.getElementById('app'); if(app) app.style.display='none';
+  var card=document.querySelector('#login .login-card'); if(!card) return;
+  if(state==='err'){
+    card.innerHTML='<h2>Şifre Sıfırlama</h2><div style="color:var(--red);font-size:14px;margin:10px 0 4px">'+msg+'</div>'
+      +'<button class="btn btn-block mt" onclick="location.replace(location.origin+location.pathname)">Giriş Ekranına Dön</button>';
+    return;
+  }
+  card.innerHTML='<h2>Yeni Şifre Belirle</h2>'
+    +'<label>Yeni Şifre</label><input type="password" id="rcP1" placeholder="En az 6 karakter" autocomplete="new-password">'
+    +'<label>Yeni Şifre (Tekrar)</label><input type="password" id="rcP2" placeholder="Tekrar" autocomplete="new-password" onkeydown="if(event.key===\'Enter\')rcSave()">'
+    +'<button class="btn btn-block mt" onclick="rcSave()">Şifreyi Kaydet</button>'
+    +'<div id="rcErr" style="text-align:center;margin-top:12px;font-size:13px"></div>';
+}
+async function rcSave(){
+  var p1=(document.getElementById('rcP1')||{}).value||'', p2=(document.getElementById('rcP2')||{}).value||'';
+  var err=document.getElementById('rcErr');
+  if(p1.length<6){ if(err){err.style.color='var(--red)';err.textContent='En az 6 karakter';} return; }
+  if(p1!==p2){ if(err){err.style.color='var(--red)';err.textContent='Şifreler uyuşmuyor';} return; }
+  if(err){ err.style.color='var(--text-dim)'; err.textContent='Kaydediliyor...'; }
+  var r=await sb.auth.updateUser({password:p1});
+  if(r.error){ if(err){err.style.color='var(--red)';err.textContent='Hata: '+(r.error.message||r.error);} return; }
+  if(err){ err.style.color='var(--green)'; err.textContent='Şifre güncellendi. Giriş ekranına yönlendiriliyorsunuz...'; }
+  try{ await sb.auth.signOut(); }catch(e){}
+  setTimeout(function(){ location.replace(location.origin+location.pathname); }, 1500);
+}
+async function startRecovery(rx){
+  try{
+    if(rx.mode==='code'){ var r=await sb.auth.exchangeCodeForSession(rx.code); if(r.error) throw r.error; }
+    else if(rx.mode==='token_hash'){ var r2=await sb.auth.verifyOtp({type:'recovery', token_hash:rx.token_hash}); if(r2.error) throw r2.error; }
+    else { // hash: detectSessionInUrl oturumu otomatik kurar; bekle
+      var ok=false; for(var i=0;i<25;i++){ var s=await sb.auth.getSession(); if(s.data&&s.data.session){ok=true;break;} await new Promise(function(res){setTimeout(res,200);}); }
+      if(!ok) throw new Error('session yok');
+    }
+  }catch(e){ showRecoveryUI('err','Bağlantı geçersiz veya süresi dolmuş. Lütfen yeni bir “Şifremi unuttum” linki isteyin.'); return; }
+  showRecoveryUI('form','');
+}
+if(__recovery){ startRecovery(__recovery); }
+
 let CURRENT = null;
 let FIRMALAR = [], URUNLER = [], FIYATLAR = [];
 
@@ -321,6 +375,7 @@ async function loadCoreData(){
   FIRMALAR = r[0].data||[]; URUNLER = r[1].data||[]; FIYATLAR = r[2].data||[];
 }
 window.addEventListener('DOMContentLoaded', async function(){
+  if(window.__bardaksRecovery){ return; } // recovery modunda auto signOut/login YOK — şifre ekranı korunur
   await loadCoreData();
   const remember = localStorage.getItem('bardaks_remember')==='1';
   const sess = await sb.auth.getSession();

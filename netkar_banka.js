@@ -192,7 +192,7 @@
     tries=(tries==null)?60:tries;
     if(typeof sb==='undefined'||!sb||!sb.auth){ if(tries>0) setTimeout(function(){hookAuth(tries-1);},200); return; }
     try{ sb.auth.onAuthStateChange(function(event,session){
-      if(event==='PASSWORD_RECOVERY') showRecovery();
+      if(event==='PASSWORD_RECOVERY' && !window.__bardaksRecovery) showRecovery();
       if(event==='SIGNED_IN'&&session&&session.user){ if(session.user.email){ try{localStorage.setItem('bardaks_last_email',session.user.email);}catch(e){} }
         if(!coreReloaded){coreReloaded=true;setTimeout(reloadCore,700);} }
     }); }catch(e){ if(tries>0) setTimeout(function(){hookAuth(tries-1);},200); } }
@@ -204,7 +204,7 @@
     if(card&&!$('nbForgot')){ var d=document.createElement('div');d.style.cssText='text-align:center;margin-top:10px';
       d.innerHTML='<a href="#" id="nbForgot" style="font-size:13px;color:#1e5ba8;text-decoration:none">Sifremi unuttum</a>';
       card.appendChild(d); $('nbForgot').addEventListener('click',function(e){e.preventDefault();forgot();}); }
-    if(isRecovery) showRecovery();
+    if(isRecovery && !window.__bardaksRecovery) showRecovery();
   });
   async function forgot(){
     var ei=$('emailInput'),err=$('loginError'); var email=ei?ei.value.trim():'';
