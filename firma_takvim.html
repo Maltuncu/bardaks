@@ -68,9 +68,13 @@ table.rpt tr.t td{font-weight:700;background:var(--s2)}
     <select id="selF" onchange="onFirma()" style="font-weight:700;font-size:16px;border:none;background:transparent;color:var(--ac)"></select>
   </div>
   <div class="tabs">
-    <div class="tab on" onclick="setTab('takvim')">📅 Takvim</div>
-    <div class="tab" onclick="setTab('rapor')">📊 Rapor</div>
+    <div class="tab on" onclick="setTab('ozet')">📊 Özet</div>
     <div class="tab" onclick="setTab('fiyat')">💰 Fiyat</div>
+    <div class="tab" onclick="setTab('takvim')">📅 Sipariş</div>
+    <div class="tab" onclick="setTab('tahsilat')">💵 Tahsilat</div>
+    <div class="tab" onclick="setTab('cek')">🧾 Çek</div>
+    <div class="tab" onclick="setTab('bakiye')">💳 Bakiye</div>
+    <div class="tab" onclick="setTab('rapor')">📈 Rapor</div>
     <div class="tab" onclick="setTab('gecmis')">📋 Geçmiş</div>
   </div>
   <div id="priceWarn"></div>
@@ -85,7 +89,7 @@ const GN=['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
 const TL=n=>(Math.round((+n||0)*100)/100).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' ₺';
 const AD=n=>(+n||0).toLocaleString('tr-TR');
 const PCT=n=>(n>=0?'+':'')+n.toFixed(1)+'%';
-let F=[],FY=[],UR=[],curMo=new Date(),cF=null,cTab='takvim';
+let F=[],FY=[],UR=[],curMo=new Date(),cF=null,cTab='ozet';
 const urlF=new URLSearchParams(location.search).get('firma');
 
 (async()=>{const{data:{session}}=await sb.auth.getSession();if(session)start();else document.getElementById('login').style.display='block';
@@ -109,8 +113,166 @@ async function reloadData(){
   F=rf.data||[];UR=ru.data||[];FY=rp.data||[];
 }
 function onFirma(){cF=document.getElementById('selF').value;render();}
-function setTab(t){cTab=t;document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('on',['takvim','rapor','fiyat','gecmis'][i]===t));render();}
-function render(){if(cTab==='takvim')renderTakvim();else if(cTab==='rapor')renderRapor();else if(cTab==='fiyat')renderFiyat();else if(cTab==='gecmis')renderGecmis();}
+function setTab(t){cTab=t;document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('on',['ozet','fiyat','takvim','tahsilat','cek','bakiye','rapor','gecmis'][i]===t));render();}
+function render(){var pw=document.getElementById('priceWarn');if(pw&&cTab!=='fiyat')pw.innerHTML='';
+  if(cTab==='ozet')renderOzet();else if(cTab==='takvim')renderTakvim();else if(cTab==='rapor')renderRapor();else if(cTab==='fiyat')renderFiyat();else if(cTab==='gecmis')renderGecmis();
+  else if(cTab==='tahsilat')renderTahsilat();else if(cTab==='cek')renderCek();else if(cTab==='bakiye')renderBakiye();}
+// ═══ HELPER (MVP) ═══
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function trd(d){if(!d)return '';var x=new Date(d);return isNaN(x)?String(d):x.toLocaleDateString('tr-TR');}
+function tdy(){return new Date().toISOString().slice(0,10);}
+function fval(id){var e=document.getElementById(id);return e?String(e.value).trim():'';}
+var BTN='background:var(--ac);color:#1a1208;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12px';
+var BTS='background:var(--s2);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer;font-size:12px';
+var BTD='background:var(--rd);color:#fff;border:none;border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer;font-size:12px';
+var CEKD={beklemede:'Beklemede',tahsil_edildi:'Tahsil Edildi',karsiliksiz:'Karşılıksız',iptal:'İptal'};
+async function fmEnsureHesaplar(){ if(window._fmHesaplar) return; var r=await sb.from('hesap_bakiye').select('*'); window._fmHesaplar=(r.data||[]).filter(function(h){return h.aktif!==false && h.is_deleted!==true;}); }
+function fmHesapTip(tip){return {nakit:'kasa',havale:'banka',kredi_karti:'pos',cek:'banka'}[tip]||'banka';}
+function fmHesapOpts(tip){var t=fmHesapTip(tip);var list=(window._fmHesaplar||[]).filter(function(h){return String(h.tip||'').toLowerCase()===t;});
+  if(!list.length)return '<option value="">Bu tip için aktif '+t+' hesabı yok</option>';
+  return '<option value="">Hesap seç</option>'+list.map(function(h){return '<option value="'+h.id+'">'+esc(h.ad)+' ('+esc(h.tip)+')</option>';}).join('');}
+function fmHesapOptsAll(){var list=(window._fmHesaplar||[]);if(!list.length)return '<option value="">Aktif hesap yok</option>';
+  return '<option value="">Hesap seç</option>'+list.map(function(h){return '<option value="'+h.id+'">'+esc(h.ad)+' ('+esc(h.tip)+')</option>';}).join('');}
+function fmOpenMo(html){document.getElementById('mp').innerHTML=html;document.getElementById('mo').classList.add('open');}
+
+// ═══ 📊 ÖZET ═══
+async function renderOzet(){
+  var c=document.getElementById('content');c.innerHTML='<div class="card">Yükleniyor…</div>';var fid=cF;
+  var res=await Promise.all([
+    sb.from('cari_ozet').select('toplam_fatura,toplam_odenen,kalan_bakiye').eq('firma_id',fid),
+    sb.from('siparisler').select('tarih,toplam_kdv_dahil,durum').eq('firma_id',fid).eq('is_deleted',false).order('tarih',{ascending:false}).limit(1),
+    sb.from('tahsilatlar').select('tarih,tutar,odeme_tipi').eq('firma_id',fid).eq('is_deleted',false).order('tarih',{ascending:false}).limit(1),
+    sb.from('tahsilatlar').select('id').eq('firma_id',fid).eq('odeme_tipi','cek').eq('cek_durumu','beklemede').eq('is_deleted',false)
+  ]);
+  var cari=(res[0].data&&res[0].data[0])||{},sonSip=res[1].data&&res[1].data[0],sonTah=res[2].data&&res[2].data[0],bekCek=(res[3].data||[]).length;
+  var katalog=FY.filter(function(p){return p.firma_id===fid;}),katSay=katalog.length;
+  var fiyatli={};katalog.forEach(function(p){fiyatli[p.urun_id]=1;});
+  var satisUr=UR.filter(function(u){return u.satis_urunu!==false && !u.is_deleted;});
+  var fiyatEksik=satisUr.filter(function(u){return !fiyatli[u.id];}).length;
+  var maliyetEksik=satisUr.filter(function(u){return !Number(u.birim_maliyet);}).length;
+  var kalan=Number(cari.kalan_bakiye||0);
+  var h='<div class="card"><div style="font-size:12px;color:var(--dm)">Açık Bakiye</div><div style="font-size:26px;font-weight:800;color:var('+(kalan>0?'--rd':'--ok,--ac')+')">'+TL(kalan)+'</div>'
+    +'<div style="font-size:12px;color:var(--dm);margin-top:4px">Fatura: '+TL(cari.toplam_fatura||0)+' · Ödenen: '+TL(cari.toplam_odenen||0)+'</div></div>';
+  h+='<div class="card"><b>Kısa Durum</b><table class="rpt">'
+    +'<tr><td>Son Sipariş</td><td class="n">'+(sonSip?trd(sonSip.tarih)+' · '+TL(sonSip.toplam_kdv_dahil)+' · '+esc(sonSip.durum||''):'—')+'</td></tr>'
+    +'<tr><td>Son Tahsilat</td><td class="n">'+(sonTah?trd(sonTah.tarih)+' · '+TL(sonTah.tutar)+' · '+esc(sonTah.odeme_tipi||''):'—')+'</td></tr>'
+    +'<tr><td>Bekleyen Çek</td><td class="n">'+bekCek+' adet</td></tr>'
+    +'<tr><td>Aktif Katalog Ürünü</td><td class="n">'+katSay+'</td></tr>'
+    +'</table></div>';
+  if(fiyatEksik>0||maliyetEksik>0){
+    h+='<div class="card" style="border-color:var(--rd)"><b style="color:var(--rd)">⚠️ Uyarılar</b><table class="rpt">';
+    if(fiyatEksik>0)h+='<tr><td>Fiyatı tanımsız satış ürünü</td><td class="n">'+fiyatEksik+'</td></tr>';
+    if(maliyetEksik>0)h+='<tr><td>Maliyeti eksik ürün (kâr şişebilir)</td><td class="n">'+maliyetEksik+'</td></tr>';
+    h+='</table></div>';
+  }
+  c.innerHTML=h;
+}
+
+// ═══ 💳 BAKİYE / CARİ ═══
+async function renderBakiye(){
+  var c=document.getElementById('content');c.innerHTML='<div class="card">Yükleniyor…</div>';
+  var res=await Promise.all([
+    sb.from('cari_ozet').select('toplam_fatura,toplam_odenen,kalan_bakiye').eq('firma_id',cF),
+    sb.from('gecmis_aylik_ozet').select('kalan_bakiye').eq('firma_id',cF)
+  ]);
+  var x=(res[0].data&&res[0].data[0])||{};
+  var gecmis=(res[1].data||[]).reduce(function(s,r){return s+Number(r.kalan_bakiye||0);},0);
+  var donem=Number(x.kalan_bakiye||0);
+  var h='<div class="card"><b>AÇIK BAKİYE / CARİ</b><table class="rpt">'
+    +'<tr><td>Toplam Fatura (KDV dahil)</td><td class="n">'+TL(x.toplam_fatura||0)+'</td></tr>'
+    +'<tr><td>− Toplam Ödenen (brüt tahsilat)</td><td class="n">'+TL(x.toplam_odenen||0)+'</td></tr>'
+    +'<tr class="t"><td>= Dönem Kalan Bakiye</td><td class="n">'+TL(donem)+'</td></tr>'
+    +'<tr><td>+ Geçmiş Aylık Bakiye</td><td class="n">'+TL(gecmis)+'</td></tr>'
+    +'<tr class="t"><td>= TOPLAM AÇIK</td><td class="n" style="color:var(--rd)">'+TL(donem+gecmis)+'</td></tr>'
+    +'</table><div style="font-size:11px;color:var(--dm);margin-top:6px">Karşılıksız/iptal çek ödeme sayılmaz; cari otomatik geri açılır.</div></div>';
+  c.innerHTML=h;
+}
+
+// ═══ 💵 TAHSİLATLAR ═══
+async function renderTahsilat(){
+  var c=document.getElementById('content');c.innerHTML='<div class="card">Yükleniyor…</div>';
+  var r=await sb.from('tahsilatlar').select('id,tarih,tutar,odeme_tipi,net_tahsil,cek_durumu').eq('firma_id',cF).eq('is_deleted',false).order('tarih',{ascending:false}).limit(50);
+  if(r.error){c.innerHTML='<div class="card" style="color:var(--rd)">Okunamadı: '+esc(r.error.message)+'</div>';return;}
+  var data=r.data||[];
+  var h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>TAHSİLATLAR</b><button style="'+BTN+'" onclick="fmOpenTahsilat()">+ Yeni Tahsilat</button></div></div>';
+  if(!data.length){h+='<div class="card">Tahsilat yok</div>';}
+  else{h+='<div class="card"><table class="rpt"><tr><th>Tarih</th><th>Tip</th><th class="n">Tutar</th><th class="n">Net</th><th></th></tr>';
+    h+=data.map(function(t){
+      var aks=t.odeme_tipi==='cek'?'<span style="font-size:11px;color:var(--dm)">çek → Çek sekmesi</span>':'<button style="'+BTD+'" onclick="fmIptalTahsilat(\''+t.id+'\')">İptal</button>';
+      return '<tr><td>'+trd(t.tarih)+'</td><td>'+esc(t.odeme_tipi||'')+(t.odeme_tipi==='cek'?' ('+esc(CEKD[t.cek_durumu]||t.cek_durumu||'')+')':'')+'</td><td class="n">'+TL(t.tutar)+'</td><td class="n">'+TL(t.net_tahsil||t.tutar)+'</td><td class="n">'+aks+'</td></tr>';
+    }).join('');h+='</table></div>';}
+  c.innerHTML=h;
+}
+async function fmOpenTahsilat(){
+  await fmEnsureHesaplar();var fad=(F.find(function(f){return f.id===cF;})||{}).ad||'';
+  fmOpenMo('<h3 style="margin:0 0 8px">💵 Tahsilat · '+esc(fad)+'</h3>'
+    +'<label>Tarih</label><input type="date" id="tmTarih" value="'+tdy()+'">'
+    +'<label>Brüt Tutar (₺)</label><input type="number" id="tmTutar">'
+    +'<label>Ödeme Tipi</label><select id="tmTip" onchange="fmTahTip()"><option value="havale">Havale/EFT</option><option value="nakit">Nakit</option><option value="kredi_karti">Kredi Kartı/POS</option><option value="cek">Çek</option></select>'
+    +'<div id="tmHesapW"><label>Hesap</label><select id="tmHesap">'+fmHesapOpts('havale')+'</select></div>'
+    +'<label>Valör / Hesaba Geçiş Tarihi</label><input type="date" id="tmValor" value="'+tdy()+'">'
+    +'<div id="tmKart" style="display:none"><label>POS Komisyon (%)</label><input type="number" id="tmKom" step="0.1"></div>'
+    +'<div id="tmCek" style="display:none"><label>Çek No</label><input id="tmCekNo"><label>Çek Vade</label><input type="date" id="tmVade"></div>'
+    +'<label>Dekont / Ref</label><input id="tmDekont"><label>Açıklama</label><input id="tmAcik">'
+    +'<div style="margin-top:10px"><button style="'+BTN+'" id="tmBtn" onclick="fmKaydetTahsilat()">Kaydet</button> <button style="'+BTS+'" onclick="closeMo()">Vazgeç</button></div>');
+}
+function fmTahTip(){var tip=document.getElementById('tmTip').value;
+  document.getElementById('tmKart').style.display=tip==='kredi_karti'?'block':'none';
+  document.getElementById('tmCek').style.display=tip==='cek'?'block':'none';
+  document.getElementById('tmHesapW').style.display=tip==='cek'?'none':'block';
+  var h=document.getElementById('tmHesap');if(h)h.innerHTML=fmHesapOpts(tip);}
+async function fmKaydetTahsilat(){
+  var tutar=Number(fval('tmTutar'));if(!(tutar>0)){alert('Geçerli brüt tutar gir');return;}
+  var tip=document.getElementById('tmTip').value;
+  if(tip==='cek'){if(!fval('tmCekNo')){alert('Çek no zorunlu');return;}if(!fval('tmVade')){alert('Çek vade tarihi zorunlu');return;}}
+  else if(!fval('tmHesap')){alert('Ödeme tipine uygun hesap seç');return;}
+  var b=document.getElementById('tmBtn');if(b){b.disabled=true;b.textContent='Kaydediliyor…';}
+  var args={p_firma:cF,p_tarih:fval('tmTarih')||tdy(),p_tutar:tutar,p_odeme_tipi:tip,
+    p_account_id:(tip==='cek'?null:(fval('tmHesap')||null)),p_komisyon_orani:Number(fval('tmKom'))||0,
+    p_cek_no:fval('tmCekNo')||null,p_cek_vade:fval('tmVade')||null,p_cek_durumu:null,
+    p_valor:fval('tmValor')||tdy(),p_dekont:fval('tmDekont')||null,p_ay_referans:null,p_aciklama:fval('tmAcik')||null};
+  var r=await sb.rpc('tahsilat_kaydet',args);
+  if(r.error){if(b){b.disabled=false;b.textContent='Kaydet';}alert('Hata: '+r.error.message);return;}
+  closeMo();render();
+}
+async function fmIptalTahsilat(id){if(!confirm('Bu tahsilat iptal edilsin mi? Cari/hesap etkisi RPC ile geri alınır.'))return;
+  var r=await sb.rpc('tahsilat_iptal',{p_tahsilat:id});if(r.error){alert('Hata: '+r.error.message);return;}renderTahsilat();}
+
+// ═══ 🧾 ÇEKLER ═══
+async function renderCek(){
+  var c=document.getElementById('content');c.innerHTML='<div class="card">Yükleniyor…</div>';
+  var r=await sb.from('tahsilatlar').select('id,tutar,cek_no,cek_vade_tarihi,cek_durumu,aciklama').eq('firma_id',cF).eq('odeme_tipi','cek').eq('is_deleted',false).order('cek_vade_tarihi',{ascending:true}).limit(50);
+  if(r.error){c.innerHTML='<div class="card" style="color:var(--rd)">Okunamadı: '+esc(r.error.message)+'</div>';return;}
+  var data=r.data||[];
+  if(!data.length){c.innerHTML='<div class="card">Çek kaydı yok</div>';return;}
+  var h='<div class="card"><table class="rpt"><tr><th>Çek No</th><th>Vade</th><th class="n">Tutar</th><th>Durum</th><th></th></tr>';
+  h+=data.map(function(t){
+    var aks='';
+    if(t.cek_durumu==='beklemede'){aks='<button style="'+BTN+'" onclick="fmCekTahsilMo(\''+t.id+'\','+t.tutar+')">Tahsil</button> '
+      +'<button style="'+BTS+'" onclick="fmCekKarsiliksiz(\''+t.id+'\')">Karşılıksız</button> '
+      +'<button style="'+BTS+'" onclick="fmCekIptal(\''+t.id+'\')">İptal</button>';}
+    return '<tr><td>'+esc(t.cek_no||'')+(t.aciklama?'<div style="font-size:11px;color:var(--dm)">'+esc(t.aciklama)+'</div>':'')+'</td><td>'+trd(t.cek_vade_tarihi)+'</td><td class="n">'+TL(t.tutar)+'</td><td>'+esc(CEKD[t.cek_durumu]||t.cek_durumu||'')+'</td><td class="n">'+aks+'</td></tr>';
+  }).join('');h+='</table></div>';c.innerHTML=h;
+}
+async function fmCekTahsilMo(id,tutar){
+  await fmEnsureHesaplar();
+  fmOpenMo('<h3 style="margin:0 0 8px">🧾 Çek Tahsil Et</h3><div style="font-size:12px;color:var(--dm);margin-bottom:8px">Tutar: <b>'+TL(tutar)+'</b> — banka/kasa hesabına net giriş yapılır.</div>'
+    +'<label>Banka / Kasa Hesabı</label><select id="ctAcc">'+fmHesapOptsAll()+'</select>'
+    +'<label>Tahsil / Valör Tarihi</label><input type="date" id="ctValor" value="'+tdy()+'">'
+    +'<div style="margin-top:10px"><button style="'+BTN+'" id="ctBtn" onclick="fmCekTahsilEt(\''+id+'\')">Tahsil Et</button> <button style="'+BTS+'" onclick="closeMo()">Vazgeç</button></div>');
+}
+async function fmCekTahsilEt(id){
+  var acc=fval('ctAcc'),valor=fval('ctValor');
+  if(!acc){alert('Banka/kasa hesabı seç');return;}if(!valor){alert('Tahsil/valör tarihi gir');return;}
+  var b=document.getElementById('ctBtn');if(b){b.disabled=true;b.textContent='İşleniyor…';}
+  var r=await sb.rpc('cek_tahsil_et',{p_tahsilat:id,p_account_id:acc,p_valor:valor});
+  if(r.error){if(b){b.disabled=false;b.textContent='Tahsil Et';}alert('Hata: '+r.error.message);return;}
+  closeMo();renderCek();
+}
+async function fmCekKarsiliksiz(id){if(!confirm('Çek KARŞILIKSIZ işaretlensin mi? Firma borcu tekrar açık görünecek.'))return;
+  var r=await sb.rpc('cek_karsiliksiz_yap',{p_tahsilat:id});if(r.error){alert('Hata: '+r.error.message);return;}renderCek();}
+async function fmCekIptal(id){if(!confirm('Çek İPTAL edilsin mi? Firma borcu tekrar açık görünecek.'))return;
+  var r=await sb.rpc('cek_iptal_et',{p_tahsilat:id});if(r.error){alert('Hata: '+r.error.message);return;}renderCek();}
 
 // ═══ 📅 TAKVİM ═══
 async function renderTakvim(){
