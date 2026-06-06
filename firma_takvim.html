@@ -49,6 +49,16 @@ table.rpt tr.t td{font-weight:700;background:var(--s2)}
 .add-pnl .ttl{font-weight:700;font-size:14px;margin-bottom:8px}
 .lbox{max-width:340px;margin:60px auto;background:var(--s);border:1px solid var(--bd);border-radius:var(--r);padding:24px}
 .lbox h2{font-size:18px;margin-bottom:12px}
+@media print{
+  body.print-rapor .top,body.print-rapor .tabs,body.print-rapor #priceWarn,body.print-rapor #login{display:none!important}
+  body.print-rapor #content>.card:first-child{display:none!important} /* donem secim bari + butonlar */
+  body.print-rapor #mo{display:none!important}
+  body.print-rapor{background:#fff;color:#000}
+  body.print-rapor .card{background:#fff;border:1px solid #ccc;box-shadow:none;break-inside:avoid}
+  body.print-rapor table.rpt th{background:#eee;color:#000}
+  body.print-rapor table.rpt td,body.print-rapor table.rpt th{border:1px solid #999;color:#000}
+  body.print-rapor .b,body.print-rapor button{display:none!important}
+}
 </style>
 </head>
 <body>
@@ -292,32 +302,106 @@ async function renderTakvim(){
 }
 function chMo(d){curMo=new Date(curMo.getFullYear(),curMo.getMonth()+d,1);render();}
 
-// ═══ 📊 RAPOR ═══
+// ═══ 📊 RAPOR (cok-donemli: gun/hafta/ay/yil/ozel) ═══
+var _rapMode=null,_rapBas=null,_rapBit=null;
+function _isoLocal(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function _rapInit(){ // varsayilan: icinde bulunulan ay
+  if(_rapMode) return;
+  var y=curMo.getFullYear(),m=curMo.getMonth();
+  _rapMode='ay';_rapBas=y+'-'+String(m+1).padStart(2,'0')+'-01';_rapBit=_isoLocal(new Date(y,m+1,0));
+}
+function setRapMode(mode){
+  var t=new Date(),y=t.getFullYear(),m=t.getMonth(),d=t.getDate();
+  if(mode==='gun'){_rapBas=_rapBit=_isoLocal(t);}
+  else if(mode==='hafta'){var wd=(t.getDay()+6)%7;var bs=new Date(y,m,d-wd);var bt=new Date(y,m,d-wd+6);_rapBas=_isoLocal(bs);_rapBit=_isoLocal(bt);}
+  else if(mode==='ay'){_rapBas=y+'-'+String(m+1).padStart(2,'0')+'-01';_rapBit=_isoLocal(new Date(y,m+1,0));}
+  else if(mode==='yil'){_rapBas=y+'-01-01';_rapBit=y+'-12-31';}
+  else if(mode==='ozel'){var ib=document.getElementById('rapBas'),it=document.getElementById('rapBit');
+    if(ib&&ib.value)_rapBas=ib.value; if(it&&it.value)_rapBit=it.value;
+    if(_rapBas>_rapBit){alert('Başlangıç tarihi bitişten büyük olamaz');return;}}
+  _rapMode=mode;renderRapor();
+}
+async function rapVeri(firmaId,bas,bit){
+  var firmaAd=(F.find(function(f){return f.id===firmaId;})||{}).ad||'';
+  var gunFark=Math.round((new Date(bit)-new Date(bas))/86400000);
+  var grupTipi=(gunFark>31)?'ay':'gun';
+  var rs=await sb.from('siparisler').select('id,tarih').eq('firma_id',firmaId).eq('is_deleted',false).neq('durum','iptal').gte('tarih',bas).lte('tarih',bit);
+  var sips=rs.data||[];var sids=sips.map(function(s){return s.id;});var sipMap={};sips.forEach(function(s){sipMap[s.id]=s.tarih;});
+  var kalemler=[];
+  if(sids.length){var rk=await sb.from('siparis_kalemleri').select('siparis_id,urun_ad,adet,birim_fiyat_kdv_haric,toplam_kdv_haric,toplam_kdv_dahil').in('siparis_id',sids).eq('is_deleted',false);kalemler=rk.data||[];}
+  var grupMap={};var urunOzet={};var dA=0,dH=0,dD=0;
+  kalemler.forEach(function(k){
+    var t=sipMap[k.siparis_id];if(!t)return;
+    var anahtar=(grupTipi==='ay')?t.slice(0,7):t;
+    var g=grupMap[anahtar]=grupMap[anahtar]||{};
+    var pk=g[k.urun_ad]=g[k.urun_ad]||{f:+k.birim_fiyat_kdv_haric,a:0,h:0,d:0};
+    pk.a+=+k.adet;pk.h+=+k.toplam_kdv_haric;pk.d+=+k.toplam_kdv_dahil;
+    var u=urunOzet[k.urun_ad]=urunOzet[k.urun_ad]||{a:0,h:0,d:0};u.a+=+k.adet;u.h+=+k.toplam_kdv_haric;u.d+=+k.toplam_kdv_dahil;
+    dA+=+k.adet;dH+=+k.toplam_kdv_haric;dD+=+k.toplam_kdv_dahil;
+  });
+  var gruplar=Object.keys(grupMap).sort().map(function(an){
+    var prods=Object.entries(grupMap[an]).sort(function(a,b){return b[1].a-a[1].a;});
+    var ga=prods.reduce(function(s,p){return s+p[1].a;},0),gh=prods.reduce(function(s,p){return s+p[1].h;},0),gd=prods.reduce(function(s,p){return s+p[1].d;},0);
+    var etiket;
+    if(grupTipi==='ay'){etiket=AY[+an.slice(5,7)-1]+' '+an.slice(0,4);}
+    else{var dd=new Date(an+'T00:00:00');var gl=['Paz','Pzt','Sal','Çar','Per','Cum','Cmt'][dd.getDay()];etiket=an.slice(8,10)+' '+AY[+an.slice(5,7)-1]+' '+gl;}
+    return {anahtar:an,etiket:etiket,urunler:prods.map(function(e){return {urun_ad:e[0],adet:e[1].a,birim_haric:e[1].f,toplam_haric:e[1].h,toplam_dahil:e[1].d};}),grup_adet:ga,grup_haric:gh,grup_dahil:gd};
+  });
+  var rt=await sb.from('tahsilatlar').select('odeme_tipi,tutar').eq('firma_id',firmaId).eq('is_deleted',false).gte('tarih',bas).lte('tarih',bit);
+  var tMap={},tTop=0;(rt.data||[]).forEach(function(x){tMap[x.odeme_tipi]=(tMap[x.odeme_tipi]||0)+ +x.tutar;tTop+=+x.tutar;});
+  var rc=await sb.from('cari_ozet').select('kalan_bakiye').eq('firma_id',firmaId);
+  var acik=(rc.data&&rc.data[0])?Number(rc.data[0].kalan_bakiye||0):0;
+  return {firmaAd:firmaAd,bas:bas,bit:bit,mode:_rapMode,grupTipi:grupTipi,gruplar:gruplar,
+    urunOzet:Object.entries(urunOzet).sort(function(a,b){return b[1].d-a[1].d;}).map(function(e){return {urun_ad:e[0],adet:e[1].a,toplam_haric:e[1].h,toplam_dahil:e[1].d};}),
+    donem:{adet:dA,haric:dH,dahil:dD},
+    tahsilatOzet:Object.entries(tMap).map(function(e){return {odeme_tipi:e[0],brut:e[1]};}),tahsilatBrut:tTop,acikBakiye:acik};
+}
 async function renderRapor(){
-  const c=document.getElementById('content');const y=curMo.getFullYear(),m=curMo.getMonth();
-  const bas=y+'-'+String(m+1).padStart(2,'0')+'-01';const son=new Date(y,m+1,0);const bit=y+'-'+String(m+1).padStart(2,'0')+'-'+String(son.getDate()).padStart(2,'0');
-  const rs=await sb.from('siparisler').select('id,tarih').eq('firma_id',cF).eq('is_deleted',false).neq('durum','iptal').gte('tarih',bas).lte('tarih',bit);
-  const sids=(rs.data||[]).map(s=>s.id);let kalemler=[];
-  if(sids.length){const rk=await sb.from('siparis_kalemleri').select('siparis_id,urun_ad,adet,birim_fiyat_kdv_haric,kdv_orani,toplam_kdv_haric,toplam_kdv_dahil').in('siparis_id',sids).eq('is_deleted',false);kalemler=rk.data||[];}
-  const sipMap={};(rs.data||[]).forEach(s=>sipMap[s.id]=s.tarih);
-  const dayProd={};let gH=0,gD=0,gA=0;
-  kalemler.forEach(k=>{const t=sipMap[k.siparis_id];if(!t)return;const dk=dayProd[t]=dayProd[t]||{};const pk=dk[k.urun_ad]=dk[k.urun_ad]||{f:+k.birim_fiyat_kdv_haric,a:0,h:0,d:0};
-    pk.a+=+k.adet;pk.h+=+k.toplam_kdv_haric;pk.d+=+k.toplam_kdv_dahil;gH+=+k.toplam_kdv_haric;gD+=+k.toplam_kdv_dahil;gA+=+k.adet;});
-  let h='<div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px"><button class="b s" onclick="chMo(-1)">←</button><strong>'+AY[m]+' '+y+' Rapor</strong><button class="b s" onclick="chMo(1)">→</button></div>';
-  const days=Object.keys(dayProd).sort();
-  if(!days.length){h+='<div class="card" style="text-align:center;color:var(--dm)">Bu ay sipariş yok.</div>';c.innerHTML=h;return;}
-  days.forEach(t=>{const prods=dayProd[t];const pl=Object.entries(prods).sort((a,b)=>b[1].a-a[1].a);
-    const da=pl.reduce((s,p)=>s+p[1].a,0);const dd=pl.reduce((s,p)=>s+p[1].d,0);
-    const d=new Date(t+'T00:00:00');const gl=['Paz','Pzt','Sal','Çar','Per','Cum','Cmt'][d.getDay()];
-    h+='<div class="card"><b>📅 '+t.slice(8,10)+' '+AY[+t.slice(5,7)-1]+' '+gl+'</b>';
-    h+='<table class="rpt"><tr><th>Ürün</th><th class="n">Adet</th><th class="n">B.Fiyat</th><th class="n">Toplam</th></tr>';
-    pl.forEach(([ad,p])=>{h+='<tr><td>'+ad+'</td><td class="n">'+AD(p.a)+'</td><td class="n">'+TL(p.f)+'</td><td class="n">'+TL(p.d)+'</td></tr>';});
-    h+='<tr class="t"><td>Toplam</td><td class="n">'+AD(da)+'</td><td></td><td class="n">'+TL(dd)+'</td></tr></table></div>';});
-  // Aylık özet
-  const pTot={};kalemler.forEach(k=>{const p=pTot[k.urun_ad]=pTot[k.urun_ad]||{a:0,h:0,d:0};p.a+=+k.adet;p.h+=+k.toplam_kdv_haric;p.d+=+k.toplam_kdv_dahil;});
-  h+='<div class="card"><b>AYLIK ÖZET</b><table class="rpt"><tr><th>Ürün</th><th class="n">Adet</th><th class="n">KDV Hariç</th><th class="n">KDV Dahil</th></tr>';
-  Object.entries(pTot).sort((a,b)=>b[1].d-a[1].d).forEach(([ad,p])=>{h+='<tr><td>'+ad+'</td><td class="n">'+AD(p.a)+'</td><td class="n">'+TL(p.h)+'</td><td class="n">'+TL(p.d)+'</td></tr>';});
-  h+='<tr class="t"><td>TOPLAM</td><td class="n">'+AD(gA)+'</td><td class="n">'+TL(gH)+'</td><td class="n">'+TL(gD)+'</td></tr></table></div>';c.innerHTML=h;
+  _rapInit();
+  var c=document.getElementById('content');
+  var modes=[['gun','Gün'],['hafta','Hafta'],['ay','Ay'],['yil','Yıl'],['ozel','Özel']];
+  var bar='<div class="card" style="padding:10px 14px"><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">'
+    +modes.map(function(md){return '<button class="b'+(_rapMode===md[0]?'':' s')+'" style="flex:1;min-width:54px;padding:7px 4px;font-size:12px" onclick="setRapMode(\''+md[0]+'\')">'+md[1]+'</button>';}).join('')+'</div>'
+    +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="date" id="rapBas" value="'+_rapBas+'" style="flex:1"><span style="color:var(--dm)">–</span><input type="date" id="rapBit" value="'+_rapBit+'" style="flex:1"><button class="b s" style="padding:7px 10px" onclick="setRapMode(\'ozel\')">Uygula</button></div>'
+    +'<div style="display:flex;gap:6px;margin-top:8px"><button class="b" style="flex:1" onclick="rapYazdir()">🖨️ Yazdır</button><button class="b s" style="flex:1" onclick="rapCsv()">⬇️ CSV</button></div></div>';
+  var v=await rapVeri(cF,_rapBas,_rapBit);
+  window._rapSon=v;
+  var donEtiket=v.firmaAd+' · '+trd(v.bas)+' – '+trd(v.bit)+(v.grupTipi==='ay'?' (ay bazlı)':'');
+  var h=bar+'<div id="rapPrint"><div class="card" style="text-align:center"><b>'+esc(donEtiket)+'</b></div>';
+  if(!v.gruplar.length){h+='<div class="card" style="text-align:center;color:var(--dm)">Bu dönemde sipariş yok.</div>';}
+  else{
+    v.gruplar.forEach(function(g){
+      h+='<div class="card"><b>'+(v.grupTipi==='ay'?'🗓️ ':'📅 ')+esc(g.etiket)+'</b><table class="rpt"><tr><th>Ürün</th><th class="n">Adet</th><th class="n">Birim (KDV hariç)</th><th class="n">Toplam (KDV dahil)</th></tr>';
+      g.urunler.forEach(function(p){h+='<tr><td>'+esc(p.urun_ad)+'</td><td class="n">'+AD(p.adet)+'</td><td class="n">'+TL(p.birim_haric)+'</td><td class="n">'+TL(p.toplam_dahil)+'</td></tr>';});
+      h+='<tr class="t"><td>Toplam</td><td class="n">'+AD(g.grup_adet)+'</td><td></td><td class="n">'+TL(g.grup_dahil)+'</td></tr></table></div>';
+    });
+    h+='<div class="card"><b>DÖNEM ÜRÜN ÖZETİ</b><table class="rpt"><tr><th>Ürün</th><th class="n">Adet</th><th class="n">KDV Hariç</th><th class="n">KDV Dahil</th></tr>';
+    v.urunOzet.forEach(function(p){h+='<tr><td>'+esc(p.urun_ad)+'</td><td class="n">'+AD(p.adet)+'</td><td class="n">'+TL(p.toplam_haric)+'</td><td class="n">'+TL(p.toplam_dahil)+'</td></tr>';});
+    h+='<tr class="t"><td>TOPLAM</td><td class="n">'+AD(v.donem.adet)+'</td><td class="n">'+TL(v.donem.haric)+'</td><td class="n">'+TL(v.donem.dahil)+'</td></tr></table></div>';
+  }
+  h+='<div class="card"><b>TAHSİLAT ÖZETİ</b><table class="rpt"><tr><th>Ödeme Tipi</th><th class="n">Brüt Tutar</th></tr>';
+  if(v.tahsilatOzet.length){v.tahsilatOzet.forEach(function(x){h+='<tr><td>'+esc(x.odeme_tipi)+'</td><td class="n">'+TL(x.brut)+'</td></tr>';});}
+  else{h+='<tr><td colspan="2" style="color:var(--dm)">Bu dönemde tahsilat yok</td></tr>';}
+  h+='<tr class="t"><td>TOPLAM</td><td class="n">'+TL(v.tahsilatBrut)+'</td></tr></table></div>';
+  h+='<div class="card"><div style="display:flex;justify-content:space-between"><b>Açık Bakiye</b><b style="color:var('+(v.acikBakiye>0?'--rd':'--ac')+')">'+TL(v.acikBakiye)+'</b></div></div>';
+  h+='</div>';
+  c.innerHTML=h;
+}
+function rapYazdir(){document.body.classList.add('print-rapor');window.print();setTimeout(function(){document.body.classList.remove('print-rapor');},500);}
+function _csvCell(s){s=String(s==null?'':s);return /[";\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function _csvNum(n){return String((Math.round((+n||0)*100)/100)).replace('.',',');} // Türkçe Excel ondalık ,
+function rapCsv(){
+  var v=window._rapSon;if(!v){alert('Önce rapor yükle');return;}
+  var H=['Tarih/Dönem','Firma','Ürün','Adet','Birim Fiyat KDV Hariç','Toplam KDV Hariç','Toplam KDV Dahil','Tahsilat Tipi','Tahsilat Tutarı','Açık Bakiye'];
+  var rows=[H];
+  v.gruplar.forEach(function(g){g.urunler.forEach(function(p){
+    rows.push([g.anahtar,v.firmaAd,p.urun_ad,p.adet,_csvNum(p.birim_haric),_csvNum(p.toplam_haric),_csvNum(p.toplam_dahil),'','','']);});});
+  v.tahsilatOzet.forEach(function(x){rows.push(['','','','','','','',x.odeme_tipi,_csvNum(x.brut),'']);});
+  rows.push(['DÖNEM TOPLAM',v.firmaAd,'',v.donem.adet,_csvNum(v.donem.haric),_csvNum(v.donem.haric),_csvNum(v.donem.dahil),'TAHSİLAT BRÜT',_csvNum(v.tahsilatBrut),_csvNum(v.acikBakiye)]);
+  var csv='﻿'+rows.map(function(r){return r.map(_csvCell).join(';');}).join('\r\n'); // UTF-8 BOM + ; ayraç
+  var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download='firma_rapor_'+(v.firmaAd||'firma').replace(/[^a-z0-9]/gi,'_')+'_'+v.bas+'_'+v.bit+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},1000);
 }
 
 // ═══ 💰 FİYAT LİSTESİ + GEÇMİŞ + DÜZENLEME ═══
