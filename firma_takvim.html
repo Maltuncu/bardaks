@@ -58,6 +58,15 @@ table.rpt tr.t td{font-weight:700;background:var(--s2)}
   body.print-rapor table.rpt th{background:#eee;color:#000}
   body.print-rapor table.rpt td,body.print-rapor table.rpt th{border:1px solid #999;color:#000}
   body.print-rapor .b,body.print-rapor button{display:none!important}
+  /* === PORTFÖY YAZDIR === */
+  body.print-portfoy .top,body.print-portfoy .tabs,body.print-portfoy #priceWarn,body.print-portfoy #login,body.print-portfoy #mo{display:none!important}
+  body.print-portfoy #content>.card{display:none!important}
+  body.print-portfoy #portfoyPrint{display:block!important}
+  body.print-portfoy{background:#fff;color:#000}
+  body.print-portfoy .card{background:#fff;border:1px solid #ccc;box-shadow:none;break-inside:avoid}
+  body.print-portfoy table.rpt th{background:#eee;color:#000}
+  body.print-portfoy table.rpt td,body.print-portfoy table.rpt th{border:1px solid #999;color:#000}
+  body.print-portfoy .b,body.print-portfoy button{display:none!important}
 }
 #tk-ov{position:fixed;inset:0;z-index:60;background:var(--bg);display:none;flex-direction:column}
 #tk-ov.open{display:flex}
@@ -101,7 +110,7 @@ table.rpt tr.t td{font-weight:700;background:var(--s2)}
   </div>
   <div class="tabs">
     <div class="tab on" onclick="setTab('ozet')">📊 Özet</div>
-    <div class="tab" onclick="setTab('fiyat')">💰 Fiyat</div>
+    <div class="tab" onclick="setTab('fiyat')">📦 Portföy</div>
     <div class="tab" onclick="setTab('takvim')">📅 Sipariş</div>
     <div class="tab" onclick="setTab('tahsilat')">💵 Tahsilat</div>
     <div class="tab" onclick="setTab('cek')">🧾 Çek</div>
@@ -533,45 +542,82 @@ function rapCsv(){
 // ═══ 💰 FİYAT LİSTESİ + GEÇMİŞ + DÜZENLEME ═══
 async function renderFiyat(){
   const c=document.getElementById('content');
+  const firmaAd=(F.find(f=>f.id===cF)||{}).ad||'';
   const fiyatlar=FY.filter(p=>p.firma_id===cF).sort((a,b)=>(a.urun_ad||'').localeCompare(b.urun_ad||'','tr'));
   // Fiyat değişim geçmişi
   const rl=await sb.from('firma_urun_log').select('*').eq('firma_id',cF).order('olusturma',{ascending:false}).limit(100);
   const logs=rl.data||[];
   const logMap={};logs.forEach(l=>{const uid=l.urun_id||'?';logMap[uid]=logMap[uid]||[];logMap[uid].push(l);});
-
-  let h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><b>💰 Fiyat Listesi ('+fiyatlar.length+')</b><div style="display:flex;gap:6px"><button class="b s" style="font-size:12px;padding:6px 10px" onclick="openTeklif()">📄 Teklif</button><button class="b s" style="font-size:12px;padding:6px 10px" onclick="showAddPrice()">➕ Yeni Ürün</button></div></div>';
-  if(!fiyatlar.length) h+='<div style="color:var(--dm)">Bu firmaya tanımlı fiyat yok.</div>';
-  else fiyatlar.forEach(p=>{
-    const uid=p.urun_id;
-    const hist=logMap[uid]||[];
-    const u=UR.find(x=>x.id===uid)||{};
-    const maliyet=Number(u.birim_maliyet||0);
-    const satisHaric=Number(p.birim_fiyat_kdv_haric||0);
-    let karHtml;
-    if(maliyet>0){const net=satisHaric-maliyet;const marj=satisHaric>0?(net/satisHaric*100):0;
-      karHtml='Maliyet (KDV hariç): '+TL(maliyet)+' · <b style="color:var('+(net>=0?'--gn':'--rd')+')">Birim net kâr: '+TL(net)+'</b> (marj %'+marj.toFixed(1)+')';}
-    else karHtml='<span style="color:var(--rd)">⚠️ Maliyet girilmemiş — birim net kâr hesaplanamıyor</span>';
-    h+='<div class="fl-row"><div style="flex:1"><div style="font-weight:600">'+p.urun_ad+'</div>'
-      +'<div style="font-size:11px;color:var(--dm)">KDV %'+(p.kdv_orani||1)+'</div>'
-      +'<div style="font-size:11px;color:var(--dm);margin-top:2px">'+karHtml+'</div></div>'
-      +'<div style="display:flex;align-items:center;gap:8px"><div style="text-align:right"><div style="font-size:10px;color:var(--dm)">Satış (KDV hariç)</div><b style="color:var(--ac);font-size:16px">'+TL(satisHaric)+'</b></div>'
-      +'<button class="b s" style="padding:5px 10px;font-size:12px" onclick="editPrice(\''+p.id+'\',\''+uid+'\',\''+p.urun_ad.replace(/'/g,"\\'")+'\','+satisHaric+','+(p.kdv_orani||1)+')">✏️</button>'
-      +'<button class="b s" style="padding:5px 10px;font-size:12px;color:var(--rd)" onclick="urunKaldir(\''+p.id+'\',\''+uid+'\',\''+p.urun_ad.replace(/'/g,"\\'")+'\')">Kaldır</button></div></div>';
-    // Fiyat geçmişi
-    if(hist.length){
-      h+='<div class="fl-hist">';
-      hist.slice(0,5).forEach(l=>{
-        const tarih=l.olusturma?new Date(l.olusturma).toLocaleDateString('tr-TR'):'?';
-        const eski=+l.eski_fiyat||0,yeni=+l.yeni_fiyat||0;
-        const fark=eski>0?((yeni-eski)/eski*100):0;
-        const cls=fark>0?'zam':'ind';
-        h+='<div style="margin:2px 0">'+tarih+': '+TL(eski)+' → '+TL(yeni)+' <span class="'+cls+'">('+PCT(fark)+')</span></div>';
-      });
-      h+='</div>';
-    }
+  // Son sipariş + toplam satış (firma kapsamlı, is_deleted=false) — YENİ TABLO YOK
+  const sonMap={},satisMap={};
+  const rs=await sb.from('siparisler').select('id,tarih').eq('firma_id',cF).eq('is_deleted',false).neq('durum','iptal');
+  const sips=rs.data||[];const sids=sips.map(s=>s.id);const sipT={};sips.forEach(s=>sipT[s.id]=s.tarih);
+  if(sids.length){
+    const rk=await sb.from('siparis_kalemleri').select('siparis_id,urun_id,adet').in('siparis_id',sids).eq('is_deleted',false);
+    (rk.data||[]).forEach(k=>{const t=sipT[k.siparis_id];if(!t)return;
+      satisMap[k.urun_id]=(satisMap[k.urun_id]||0)+(+k.adet||0);
+      const cur=sonMap[k.urun_id];
+      if(!cur||t>cur.tarih)sonMap[k.urun_id]={tarih:t,adet:(+k.adet||0)};
+      else if(t===cur.tarih)cur.adet+=(+k.adet||0);
+    });
+  }
+  // satır verisi
+  const rows=fiyatlar.map(p=>{const u=UR.find(x=>x.id===p.urun_id)||{};
+    const maliyet=Number(u.birim_maliyet||0),satis=Number(p.birim_fiyat_kdv_haric||0);
+    const net=maliyet>0?(satis-maliyet):null,marj=(maliyet>0&&satis>0)?(net/satis*100):null;
+    return {p:p,u:u,maliyet:maliyet,satis:satis,net:net,marj:marj,gramaj:u.gramaj||'',kdv:(p.kdv_orani||u.kdv_orani||1),son:sonMap[p.urun_id]||null,topAdet:satisMap[p.urun_id]||0};});
+  const aktifSay=rows.length;
+  // EMPTY STATE
+  if(!aktifSay){
+    c.innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>📦 Portföy</b></div>'
+      +'<div style="text-align:center;color:var(--dm);padding:30px 16px"><div style="font-size:34px;opacity:.5;margin-bottom:10px">📦</div>'
+      +'Bu firmaya henüz ürün/fiyat tanımlı değil.<br>Önce katalogdan ürün ekleyip firma fiyatını girin.'
+      +'<div style="margin-top:14px"><button class="b" onclick="showAddPrice()">➕ Ürün Ekle</button></div><div id="addPriceArea"></div></div></div>';
+    return;
+  }
+  // KPI
+  const marjlilar=rows.filter(r=>r.marj!=null);
+  const ortMarj=marjlilar.length?(marjlilar.reduce((s,r)=>s+r.marj,0)/marjlilar.length):null;
+  const enCok=rows.filter(r=>r.topAdet>0).sort((a,b)=>b.topAdet-a.topAdet)[0]||null;
+  const enKar=rows.filter(r=>r.net!=null).sort((a,b)=>b.net-a.net)[0]||null;
+  let h='<div class="card" style="padding:12px 14px"><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">'
+    +'<div><div style="font-size:11px;color:var(--dm)">Aktif Ürün</div><b style="font-size:18px">'+aktifSay+'</b></div>'
+    +'<div><div style="font-size:11px;color:var(--dm)">Ortalama Marj</div><b style="font-size:18px;color:var(--ac)">'+(ortMarj==null?'—':('%'+ortMarj.toFixed(1)))+'</b></div>'
+    +'<div><div style="font-size:11px;color:var(--dm)">En Çok Satan</div><b style="font-size:14px">'+(enCok?esc(enCok.p.urun_ad)+' <span style="color:var(--dm);font-weight:400">('+AD(enCok.topAdet)+')</span>':'—')+'</b></div>'
+    +'<div><div style="font-size:11px;color:var(--dm)">En Kârlı</div><b style="font-size:14px;color:var(--gn)">'+(enKar?esc(enKar.p.urun_ad)+' <span style="color:var(--dm);font-weight:400">('+TL(enKar.net)+')</span>':'—')+'</b></div>'
+    +'</div></div>';
+  h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><b>📦 Portföy ('+aktifSay+')</b><div style="display:flex;gap:6px;flex-wrap:wrap">'
+    +'<button class="b s" style="font-size:12px;padding:6px 10px" onclick="portfoyYazdir()">📄 Yazdır</button>'
+    +'<button class="b s" style="font-size:12px;padding:6px 10px" onclick="openTeklif()">📄 Teklif</button>'
+    +'<button class="b s" style="font-size:12px;padding:6px 10px" onclick="showAddPrice()">➕ Yeni Ürün</button></div></div>';
+  rows.forEach(r=>{const p=r.p,uid=p.urun_id,hist=logMap[uid]||[];
+    const karHtml=r.maliyet>0
+      ?'Maliyet (KDV hariç): '+TL(r.maliyet)+' · <b style="color:var('+(r.net>=0?'--gn':'--rd')+')">Birim net kâr: '+TL(r.net)+'</b> (marj %'+r.marj.toFixed(1)+')'
+      :'<span style="color:var(--rd)">⚠️ Maliyet girilmemiş — birim net kâr hesaplanamıyor</span>';
+    const sonHtml=r.son?('Son sipariş: '+trd(r.son.tarih)+' · '+AD(r.son.adet)+' adet'):'<span style="color:var(--dm)">Henüz sipariş yok</span>';
+    h+='<div class="fl-row"><div style="flex:1;min-width:0"><div style="font-weight:600">'+esc(p.urun_ad)+(r.gramaj?' <span style="font-size:11px;color:var(--dm)">('+esc(r.gramaj)+')</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:var(--dm)">KDV %'+r.kdv+'</div>'
+      +'<div style="font-size:11px;color:var(--dm);margin-top:2px">'+karHtml+'</div>'
+      +'<div style="font-size:11px;color:var(--dm);margin-top:2px">'+sonHtml+'</div></div>'
+      +'<div style="display:flex;align-items:center;gap:8px"><div style="text-align:right"><div style="font-size:10px;color:var(--dm)">Satış (KDV hariç)</div><b style="color:var(--ac);font-size:16px">'+TL(r.satis)+'</b></div>'
+      +'<button class="b s" style="padding:5px 10px;font-size:12px" onclick="editPrice(\''+p.id+'\',\''+uid+'\',\''+String(p.urun_ad).replace(/'/g,"\\'")+'\','+r.satis+','+r.kdv+')">✏️</button>'
+      +'<button class="b s" style="padding:5px 10px;font-size:12px;color:var(--rd)" onclick="urunKaldir(\''+p.id+'\',\''+uid+'\',\''+String(p.urun_ad).replace(/'/g,"\\'")+'\')">Kaldır</button></div></div>';
+    if(hist.length){h+='<div class="fl-hist">';
+      hist.slice(0,5).forEach(l=>{const tarih=l.olusturma?new Date(l.olusturma).toLocaleDateString('tr-TR'):'?';const eski=+l.eski_fiyat||0,yeni=+l.yeni_fiyat||0;const fark=eski>0?((yeni-eski)/eski*100):0;const cls=fark>0?'zam':'ind';h+='<div style="margin:2px 0">'+tarih+': '+TL(eski)+' → '+TL(yeni)+' <span class="'+cls+'">('+PCT(fark)+')</span></div>';});
+      h+='</div>';}
   });
-  h+='<div id="addPriceArea"></div></div>';c.innerHTML=h;
+  h+='<div id="addPriceArea"></div></div>';
+  h+=buildPortfoyPrint(firmaAd,rows);
+  c.innerHTML=h;
 }
+function buildPortfoyPrint(firmaAd,rows){
+  let t='<div id="portfoyPrint" style="display:none"><div class="card"><div style="text-align:center;margin-bottom:8px"><b>'+esc(firmaAd)+' · Ürün Portföyü</b><div style="font-size:12px;color:var(--dm)">'+trd(tdy())+'</div></div>'
+    +'<table class="rpt"><tr><th>Ürün</th><th>Gramaj</th><th class="n">Maliyet</th><th class="n">Fiyat</th><th class="n">Kâr</th><th class="n">Marj</th><th>Son Sipariş</th></tr>';
+  rows.forEach(r=>{t+='<tr><td>'+esc(r.p.urun_ad)+'</td><td>'+esc(r.gramaj||'-')+'</td><td class="n">'+(r.maliyet>0?TL(r.maliyet):'-')+'</td><td class="n">'+TL(r.satis)+'</td><td class="n">'+(r.net!=null?TL(r.net):'-')+'</td><td class="n">'+(r.marj!=null?('%'+r.marj.toFixed(1)):'-')+'</td><td>'+(r.son?(trd(r.son.tarih)+' ('+AD(r.son.adet)+')'):'-')+'</td></tr>';});
+  t+='</table><div style="font-size:11px;color:var(--dm);margin-top:6px">Fiyat ve maliyet KDV hariçtir.</div></div></div>';
+  return t;
+}
+function portfoyYazdir(){document.body.classList.add('print-portfoy');window.print();setTimeout(function(){document.body.classList.remove('print-portfoy');},500);}
 
 function editPrice(fufId,urunId,ad,fiy,kdv){
   const bugun=new Date().toISOString().slice(0,10);
