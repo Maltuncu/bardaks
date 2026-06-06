@@ -415,9 +415,59 @@ async function renderPanel(){
   h += '<div class="card"><div class="card-title">Firma Bazlı Açık Bakiye</div><div class="table-wrap"><table><tr><th>Firma</th><th style="text-align:right">Açık Bakiye</th><th></th></tr>';
   h += borcList.map(function(x){return '<tr><td>'+x.ad+'</td><td style="text-align:right;font-weight:700;color:var(--red)">'+TL(x.borc)+'</td><td style="text-align:right"><button class="btn btn-sec btn-sm" onclick="openTahsilat(\''+x.fid+'\')">Tahsilat</button></td></tr>';}).join('')||'<tr><td colspan=3 class="empty">Açık bakiye yok 🎉</td></tr>';
   h += '</table></div></div>';
+  h += '<div class="card" id="bekleyenCeklerCard"><div class="card-title">🧾 Çekler</div><div id="bekleyenCekler"><div class="loading">Yükleniyor...</div></div></div>';
   h += '<div class="card"><div class="card-title">⚙️ Araçlar</div><div class="row"><button class="btn btn-sec" onclick="openGider()">💸 Gider Ekle</button>'+(CURRENT.rol==='admin'?'<button class="btn btn-sec" onclick="renderAnaliz()">📈 Analiz</button><button class="btn btn-sec" onclick="openAyarlar()">⚙️ Ayarlar</button>':'')+'</div></div>';
   el.innerHTML = h;
+  renderBekleyenCekler();
   if(CURRENT.rol==='admin') kontrolYedek();
+}
+const CEK_DURUM={beklemede:{t:'Beklemede',c:'--accent'},tahsil_edildi:{t:'Tahsil Edildi',c:'--green'},karsiliksiz:{t:'Karşılıksız',c:'--red'},iptal:{t:'İptal',c:'--text-dim'}};
+async function renderBekleyenCekler(){
+  const box=document.getElementById('bekleyenCekler'); if(!box) return;
+  const r=await sb.from('tahsilatlar').select('id,firma_id,tutar,cek_no,cek_vade_tarihi,cek_durumu,aciklama')
+    .eq('odeme_tipi','cek').eq('is_deleted',false).order('cek_vade_tarihi',{ascending:true}).limit(50);
+  if(r.error){ box.innerHTML='<div style="font-size:12px;color:var(--red)">Çekler okunamadı: '+escapeHtml(r.error.message)+'</div>'; return; }
+  const data=r.data||[];
+  if(!data.length){ box.innerHTML='<div class="empty" style="padding:14px">Çek kaydı yok</div>'; return; }
+  box.innerHTML='<div class="table-wrap"><table><tr><th>Firma</th><th>Çek No</th><th>Vade</th><th style="text-align:right">Tutar</th><th style="text-align:center">Durum</th><th></th></tr>'+data.map(function(c){
+    const fad=(FIRMALAR.find(function(f){return f.id===c.firma_id;})||{}).ad||'—';
+    const d=CEK_DURUM[c.cek_durumu]||{t:c.cek_durumu||'?',c:'--text-dim'};
+    let aksiyon='';
+    if(c.cek_durumu==='beklemede'){
+      aksiyon='<button class="btn btn-sm" onclick="openCekTahsil(\''+c.id+'\','+c.tutar+')">Tahsil Et</button>'
+        +' <button class="btn btn-sec btn-sm" onclick="cekKarsiliksiz(\''+c.id+'\')">Karşılıksız</button>'
+        +' <button class="btn btn-sec btn-sm" onclick="cekIptal(\''+c.id+'\')">İptal</button>';
+    }
+    return '<tr><td>'+escapeHtml(fad)+(c.aciklama?'<div style="font-size:11px;color:var(--text-dim)">'+escapeHtml(c.aciklama)+'</div>':'')+'</td><td>'+escapeHtml(c.cek_no||'')+'</td><td>'+trDate(c.cek_vade_tarihi||'')+'</td><td style="text-align:right;font-weight:700">'+TL(c.tutar)+'</td><td style="text-align:center"><span class="tag" style="color:var('+d.c+')">'+d.t+'</span></td><td style="text-align:right">'+aksiyon+'</td></tr>';
+  }).join('')+'</table></div>';
+}
+function openCekTahsil(id,tutar){
+  openModal('<div class="modal-head"><h3>🧾 Çek Tahsil Et</h3><button class="modal-close" onclick="closeModal()">×</button></div>'
+    +'<div style="font-size:13px;color:var(--text-dim);margin-bottom:8px">Tutar: <b>'+TL(tutar)+'</b> — banka/kasa hesabına net giriş yapılır.</div>'
+    +'<label>Banka / Kasa Hesabı</label><select id="ctAccount">'+thHesapOptions('havale')+'</select>'
+    +'<label>Tahsil / Valör Tarihi</label><input type="date" id="ctValor" value="'+today()+'">'
+    +'<button class="btn btn-block mt" id="ctBtn" onclick="cekTahsilEt(\''+id+'\')">Tahsil Et</button>');
+}
+async function cekTahsilEt(id){
+  const acc=val('ctAccount'); const valor=val('ctValor');
+  if(!acc){ toast('Tahsil edilemedi','Banka/kasa hesabı seç.'); return; }
+  if(!valor){ toast('Tahsil edilemedi','Tahsil/valör tarihi gir.'); return; }
+  const btn=document.getElementById('ctBtn'); if(btn){ btn.disabled=true; btn.textContent='İşleniyor...'; }
+  const r=await sb.rpc('cek_tahsil_et',{p_tahsilat:id,p_account_id:acc,p_valor:valor});
+  if(r.error){ if(btn){ btn.disabled=false; btn.textContent='Tahsil Et'; } toast('Tahsil edilemedi', r.error.message||'RPC hata verdi.'); return; }
+  closeModal(); toast('✅ Çek tahsil edildi','Banka/kasa girişi yapıldı.'); renderPanel();
+}
+async function cekKarsiliksiz(id){
+  if(!confirm('Çek KARŞILIKSIZ işaretlensin mi? Firma borcu tekrar açık görünecek.')) return;
+  const r=await sb.rpc('cek_karsiliksiz_yap',{p_tahsilat:id});
+  if(r.error){ toast('İşlem başarısız', r.error.message||'RPC hata verdi.'); return; }
+  toast('Çek karşılıksız işaretlendi','Cari borç geri açıldı.'); renderPanel();
+}
+async function cekIptal(id){
+  if(!confirm('Çek İPTAL edilsin mi? Firma borcu tekrar açık görünecek.')) return;
+  const r=await sb.rpc('cek_iptal_et',{p_tahsilat:id});
+  if(r.error){ toast('İşlem başarısız', r.error.message||'RPC hata verdi.'); return; }
+  toast('Çek iptal edildi','Cari borç geri açıldı.'); renderPanel();
 }
 
 function openGider(){
@@ -921,8 +971,10 @@ async function kaydetTahsilat(firmaId){
   if(!(tutar>0)){ toast('Tahsilat kaydedilemedi','Geçerli brüt tutar gir.'); return; }
   const tip=document.getElementById('thTip').value;
   const accountId=val('thAccount');
-  if(!accountId){ toast('Tahsilat kaydedilemedi','Ödeme tipine uygun aktif hesap seç.'); return; }
-  if(tip==='cek' && !val('thVade')){ toast('Tahsilat kaydedilemedi','Çek için vade tarihi gir.'); return; }
+  if(tip==='cek'){
+    if(!val('thCekNo')){ toast('Tahsilat kaydedilemedi','Çek no zorunlu.'); return; }
+    if(!val('thVade')){ toast('Tahsilat kaydedilemedi','Çek vade tarihi zorunlu.'); return; }
+  } else if(!accountId){ toast('Tahsilat kaydedilemedi','Ödeme tipine uygun aktif hesap seç.'); return; }
   const btn=document.getElementById('thSaveBtn');
   if(btn){ btn.disabled=true; btn.textContent='Kaydediliyor...'; }
   const args={
@@ -930,7 +982,7 @@ async function kaydetTahsilat(firmaId){
     p_tarih:val('thTarih')||today(),
     p_tutar:tutar,
     p_odeme_tipi:tip,
-    p_account_id:accountId,
+    p_account_id:(tip==='cek'?null:(accountId||null)),
     p_komisyon_orani:Number(document.getElementById('thKomisyon').value)||0,
     p_cek_no:val('thCekNo')||null,
     p_cek_vade:val('thVade')||null,
@@ -955,7 +1007,9 @@ async function renderTahsilatListesi(firmaId){
   if(!r.data || !r.data.length){ box.innerHTML='<div class="empty" style="padding:14px">Kayıt yok</div>'; return; }
   box.innerHTML='<div class="table-wrap"><table>'+r.data.map(function(t){
     const hesap=(window._thAccounts||[]).find(function(h){return h.id===t.account_id;});
-    return '<tr><td><strong>'+trDate(t.tarih||'')+'</strong><div style="font-size:11px;color:var(--text-dim)">'+escapeHtml(t.odeme_tipi||'')+(hesap?' · '+escapeHtml(hesap.ad):'')+'</div></td><td style="text-align:right"><strong>'+TL(t.tutar)+'</strong><div style="font-size:11px;color:var(--text-dim)">net '+TL(t.net_tahsil||t.tutar)+'</div></td><td style="text-align:right"><button class="btn btn-danger btn-sm" onclick="iptalTahsilat(\''+t.id+'\',\''+firmaId+'\')">İptal</button></td></tr>';
+    // Çek satırında generic tahsilat_iptal gizli — çek lifecycle Panel > Çekler kartından yönetilir
+    const aksiyon = t.odeme_tipi==='cek' ? '<span style="font-size:11px;color:var(--text-dim)">çek → Çekler kartı</span>' : '<button class="btn btn-danger btn-sm" onclick="iptalTahsilat(\''+t.id+'\',\''+firmaId+'\')">İptal</button>';
+    return '<tr><td><strong>'+trDate(t.tarih||'')+'</strong><div style="font-size:11px;color:var(--text-dim)">'+escapeHtml(t.odeme_tipi||'')+(hesap?' · '+escapeHtml(hesap.ad):'')+'</div></td><td style="text-align:right"><strong>'+TL(t.tutar)+'</strong><div style="font-size:11px;color:var(--text-dim)">net '+TL(t.net_tahsil||t.tutar)+'</div></td><td style="text-align:right">'+aksiyon+'</td></tr>';
   }).join('')+'</table></div>';
 }
 async function iptalTahsilat(id,firmaId){
