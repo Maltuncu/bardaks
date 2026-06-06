@@ -139,7 +139,7 @@ async function start(){
 }
 async function reloadData(){
   const[rf,ru,rp]=await Promise.all([
-    sb.from('firmalar').select('id,ad').eq('is_deleted',false).eq('aktif',true).order('ad'),
+    sb.from('firmalar').select('id,ad,notlar').eq('is_deleted',false).eq('aktif',true).order('ad'),
     sb.from('urunler').select('*').eq('aktif',true),
     sb.from('aktif_firma_fiyatlari').select('*')
   ]);
@@ -159,6 +159,23 @@ var BTN='background:var(--ac);color:#1a1208;border:none;border-radius:8px;paddin
 var BTS='background:var(--s2);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer;font-size:12px';
 var BTD='background:var(--rd);color:#fff;border:none;border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer;font-size:12px';
 var CEKD={beklemede:'Beklemede',tahsil_edildi:'Tahsil Edildi',karsiliksiz:'Karşılıksız',iptal:'İptal'};
+// ═══ 📝 FİRMA NOTU (firma hafızası — yalnız firmalar.notlar UPDATE) ═══
+function openFirmaNot(){
+  if(!cF){alert('Önce firma seç');return;}
+  var fNot=(F.find(function(f){return f.id===cF;})||{}).notlar||'';
+  fmOpenMo('<div class="mp-h"><h3>📝 Firma Notu</h3><button class="mp-x" onclick="closeMo()">✕</button></div>'
+    +'<div style="font-size:12px;color:var(--dm);margin-bottom:6px">Firma hakkında hatırlatmalar (serbest metin, satır satır).</div>'
+    +'<textarea id="fnTxt" style="width:100%;min-height:160px;resize:vertical" placeholder="Örn:\nPatron Ahmet Bey\nÇarşamba teslim ister\nÇek ile çalışır">'+esc(fNot)+'</textarea>'
+    +'<div style="margin-top:10px"><button class="b" id="fnBtn" onclick="saveFirmaNot()">Kaydet</button> <button class="b s" onclick="closeMo()">Vazgeç</button></div>');
+}
+async function saveFirmaNot(){
+  var v=(document.getElementById('fnTxt').value||'').trim();
+  var b=document.getElementById('fnBtn');if(b){b.disabled=true;b.textContent='Kaydediliyor…';}
+  var r=await sb.from('firmalar').update({notlar:v}).eq('id',cF);
+  if(r.error){if(b){b.disabled=false;b.textContent='Kaydet';}alert('Hata: '+r.error.message);return;}
+  var f=F.find(function(x){return x.id===cF;});if(f)f.notlar=v; // yerel state senkron
+  closeMo();renderOzet();
+}
 async function fmEnsureHesaplar(){ if(window._fmHesaplar) return; var r=await sb.from('hesap_bakiye').select('*'); window._fmHesaplar=(r.data||[]).filter(function(h){return h.aktif!==false && h.is_deleted!==true;}); }
 function fmHesapTip(tip){return {nakit:'kasa',havale:'banka',kredi_karti:'pos',cek:'banka'}[tip]||'banka';}
 function fmHesapOpts(tip){var t=fmHesapTip(tip);var list=(window._fmHesaplar||[]).filter(function(h){return String(h.tip||'').toLowerCase()===t;});
@@ -253,6 +270,9 @@ async function renderOzet(){
     +'<div style="font-size:30px;font-weight:800;color:var('+(kalan>0?'--rd':'--gn')+')">'+TL(kalan)+'</div>'
     +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'+(cipler||'<span style="color:var(--dm);font-size:12px">temiz</span>')+'</div></div>';
   h+='<button class="b" style="width:100%;margin-bottom:10px" onclick="openTeklif()">📄 Teklif Oluştur</button>';
+  var fNot=((F.find(function(f){return f.id===fid;})||{}).notlar||'').trim();
+  h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:'+(fNot?'6px':'0')+'"><b>📝 Firma Notu</b><button class="b s" style="font-size:12px;padding:5px 10px" onclick="openFirmaNot()">'+(fNot?'✏️ Düzenle':'➕ Not Ekle')+'</button></div>'
+    +(fNot?'<div style="white-space:pre-wrap;font-size:13px;max-height:160px;overflow-y:auto;line-height:1.5">'+esc(fNot)+'</div>':'<div style="color:var(--dm);font-size:13px">Firma notu yok</div>')+'</div>';
   // KART 2 — TİCARİ ÖZET (2x2)
   function kpi(lbl,val,clr){return '<div style="background:var(--s2);border-radius:10px;padding:10px"><div style="font-size:11px;color:var(--dm)">'+lbl+'</div><div style="font-size:17px;font-weight:800'+(clr?';color:var('+clr+')':'')+'">'+val+'</div></div>';}
   h+='<div class="card"><b>Ticari Özet</b><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">'
