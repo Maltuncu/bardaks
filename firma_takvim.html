@@ -727,79 +727,63 @@ async function checkPW(y,m){const pw=document.getElementById('priceWarn');
   h+='</div>';pw.innerHTML=h;}else pw.innerHTML='';}catch(e){pw.innerHTML='';}
 }
 
-// ═══ GÜN DETAY ═══
-async function openDay(tarih){
-  const r=await sb.from('siparisler').select('*').eq('firma_id',cF).eq('tarih',tarih).eq('is_deleted',false);const sips=r.data||[];
-  const d=new Date(tarih+'T00:00:00');const gl=['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'][d.getDay()];
-  const fname=(F.find(f=>f.id===cF)||{}).ad||'?';
-  let h='<div class="mp-h"><h3>📅 '+tarih.slice(8,10)+' '+AY[+tarih.slice(5,7)-1]+' '+gl+'</h3><button class="mp-x" onclick="closeMo()">✕</button></div>';
-  h+='<div style="color:var(--ac);font-weight:700;margin-bottom:10px">'+fname+'</div>';
-  if(sips.length){for(const s of sips){
-    const rk=await sb.from('siparis_kalemleri').select('*').eq('siparis_id',s.id).eq('is_deleted',false);const kl=rk.data||[];
-    h+='<div class="card"><div style="display:flex;justify-content:space-between"><b>'+(s.siparis_no||'—')+'</b><span style="font-size:12px;color:var(--dm)">'+TL(s.toplam_kdv_dahil)+'</span></div>';
-    if(kl.length){h+='<table class="rpt"><tr><th>Ürün</th><th class="n">Adet</th><th class="n">Fiyat</th><th class="n">Toplam</th></tr>';
-      kl.forEach(k=>{h+='<tr><td>'+k.urun_ad+'</td><td class="n">'+k.adet+'</td><td class="n">'+TL(k.birim_fiyat_kdv_haric*(1+(k.kdv_orani||1)/100))+'</td><td class="n">'+TL(k.toplam_kdv_dahil)+'</td></tr>';});
-      h+='</table>';}
-    h+='</div>';}}
-  else h+='<div style="padding:16px;text-align:center;color:var(--dm)">Bu gün sipariş yok.</div>';
-  h+='<button class="b full" style="margin-top:10px" onclick="closeMo();newSip(\''+tarih+'\')">+ Yeni sipariş ekle</button>';
-  document.getElementById('mp').innerHTML=h;document.getElementById('mo').classList.add('open');
-}
+// ═══ GÜN DETAY + FİŞ GİRİŞİ (tek panel — QUICK-ORDER-CALENDAR-DRAWER-1) ═══
+// Financial chain trigger-driven: toplam/kâr/maliyet-snapshot/cari ELLE YAZILMAZ. Insert kolonları index.html kaydetSiparis ile birebir.
 function closeMo(){document.getElementById('mo').classList.remove('open');}
-
-// ═══ YENİ SİPARİŞ (firma ürün listesi — prompt YOK) ═══
-function newSip(tarih){
-  const fl=FY.filter(p=>p.firma_id===cF);
-  window._ns=fl.map(p=>({uid:p.urun_id,ad:p.urun_ad,f:p.birim_fiyat_kdv_haric,k:p.kdv_orani,a:0}));
-  let h='<div class="mp-h"><h3>+ Sipariş · '+tarih+'</h3><button class="mp-x" onclick="closeMo()">✕</button></div>';
-  h+='<div id="nR"></div><div id="nAddArea"></div><div id="nT" class="tot"></div>';
-  h+='<button class="b full" style="margin-top:8px" onclick="saveN(\''+tarih+'\')">Kaydet</button>';
-  document.getElementById('mp').innerHTML=h;document.getElementById('mo').classList.add('open');rNR();
+function openDay(tarih){ if(!cF){alert('Önce firma seç');return;} window._qoDay=tarih; qoRender(tarih); }
+async function qoRender(tarih){
+  var fname=(F.find(function(f){return f.id===cF;})||{}).ad||'?';
+  var d=new Date(tarih+'T00:00:00');
+  var gl=['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'][d.getDay()];
+  // BÖLÜM A — o günün mevcut siparişleri
+  var rs=await sb.from('siparisler').select('id,siparis_no,durum,toplam_kdv_dahil').eq('firma_id',cF).eq('tarih',tarih).eq('is_deleted',false).order('olusturma',{ascending:true});
+  var gunSip=rs.data||[];
+  // BÖLÜM B — firma portföyü
+  var port=FY.filter(function(p){return p.firma_id===cF;}).sort(function(a,b){return (a.urun_ad||'').localeCompare(b.urun_ad||'','tr');});
+  window._qoRows=port.map(function(p){return {urun_id:p.urun_id,ad:p.urun_ad,fiyat:+p.birim_fiyat_kdv_haric,kdv:+(p.kdv_orani||1),gramaj:((UR.find(function(u){return u.id===p.urun_id;})||{}).gramaj||''),adet:0};});
+  var h='<div class="mp-h"><h3>📅 '+tarih.slice(8,10)+' '+AY[+tarih.slice(5,7)-1]+' '+gl+'</h3><button class="mp-x" onclick="closeMo();render()">✕</button></div>';
+  h+='<div style="color:var(--ac);font-weight:700;margin-bottom:8px">'+esc(fname)+'</div>';
+  h+='<div style="font-weight:700;font-size:13px;margin:2px 0 6px">📋 Bu Günün Siparişleri</div>';
+  if(gunSip.length){
+    h+=gunSip.map(function(s){return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)"><span style="font-size:13px">'+esc(s.siparis_no||'—')+' <span style="font-size:11px;color:var(--dm)">('+esc(s.durum||'')+')</span></span><b>'+TL(s.toplam_kdv_dahil)+'</b></div>';}).join('');
+  } else { h+='<div style="color:var(--dm);font-size:13px;padding:6px 0">Bu gün sipariş yok</div>'; }
+  h+='<div style="font-weight:700;font-size:13px;margin:14px 0 6px;border-top:1px solid var(--bd);padding-top:10px">🧾 Yeni Fiş Gir</div>';
+  if(!window._qoRows.length){
+    h+='<div style="color:var(--rd);font-size:13px">Bu firmada aktif ürün/fiyat yok. Önce 📦 Portföy\'den ürün/fiyat girin.</div>'
+      +'<div style="display:flex;gap:6px;margin-top:10px"><button class="b s" style="flex:1" onclick="setTab(\'fiyat\')">📦 Portföy\'e Git</button><button class="b s" style="flex:1" onclick="closeMo();render()">Kapat</button></div>';
+    document.getElementById('mp').innerHTML=h;document.getElementById('mo').classList.add('open');return;
+  }
+  h+='<div id="qoList">'+qoRowsHtml()+'</div>';
+  h+='<div id="qoToplam" class="tot" style="text-align:right;font-weight:700;margin-top:8px"></div>';
+  h+='<button class="b full" style="margin-top:10px" id="qoSaveBtn" onclick="qoSave()">Kaydet</button>';
+  h+='<div style="display:flex;gap:6px;margin-top:6px"><button class="b s" style="flex:1" onclick="qoNextDay()">Sonraki güne geç →</button><button class="b s" style="flex:1" onclick="closeMo();render()">Kapat</button></div>';
+  document.getElementById('mp').innerHTML=h;document.getElementById('mo').classList.add('open');qoHesap();
 }
-function rNR(){
-  const c=document.getElementById('nR');if(!c)return;
-  c.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><label style="margin:0;font-weight:700">Ürünler</label><span style="font-size:11px;color:var(--dm)">Yalnız firma kataloğu</span></div>'
-    +window._ns.map((s,i)=>'<div class="row"><div class="nm">'+s.ad+'<div class="pr">'+TL(s.f)+'/br (KDV hariç)</div></div><input type="number" min="0" value="'+(s.a||0)+'" oninput="window._ns['+i+'].a=+this.value||0;cNT()"><button class="x" onclick="window._ns.splice('+i+',1);rNR()">✕</button></div>').join('');
-  cNT();
+function qoRowsHtml(){
+  return (window._qoRows||[]).map(function(s,i){
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--bd)"><div style="flex:1;min-width:0"><div style="font-size:14px">'+esc(s.ad)+(s.gramaj?' <span style="font-size:11px;color:var(--dm)">('+esc(s.gramaj)+')</span>':'')+'</div><div style="font-size:12px;color:var(--dm)">'+TL(s.fiyat)+'/br (KDV hariç) · KDV %'+s.kdv+'</div><div style="font-size:11px;color:var(--dm)" id="qoSat'+i+'"></div></div><input type="number" min="0" inputmode="numeric" style="width:64px;text-align:center" value="'+(s.adet||0)+'" oninput="window._qoRows['+i+'].adet=Number(this.value)||0;qoHesap()"></div>';
+  }).join('');
 }
-function cNT(){const t=window._ns.reduce((s,r)=>s+r.a*r.f*(1+r.k/100),0);const e=document.getElementById('nT');if(e)e.textContent='Toplam: '+TL(t);}
-
-// Listede olmayan ürün ekleme (prompt yerine güzel panel)
-function showNAdd(){
-  const area=document.getElementById('nAddArea');if(!area)return;
-  const allUr=UR.filter(u=>u.aktif!==false&&!window._ns.some(n=>n.uid===u.id));
-  const opts=allUr.map(u=>'<option value="'+u.id+'" data-ad="'+u.ad+'" data-fiy="'+(u.varsayilan_fiyat||0)+'" data-kdv="'+(u.kdv_orani||1)+'">'+u.ad+'</option>').join('');
-  area.innerHTML='<div class="add-pnl"><div class="ttl">➕ Ürün Ekle</div>'
-    +'<label>Katalogdan</label><select id="naSel" onchange="naFill()"><option value="">— Seç —</option>'+opts+'</select>'
-    +'<label>veya serbest gir</label><input id="naAd" placeholder="Ürün adı">'
-    +'<div style="display:flex;gap:8px"><div style="flex:1"><label>Satış Fiyatı (KDV hariç)</label><input type="number" step="0.01" id="naFiy"></div>'
-    +'<div style="width:70px"><label>KDV %</label><input type="number" id="naKdv" value="1"></div>'
-    +'<div style="width:70px"><label>Adet</label><input type="number" id="naAdet" value="1" min="1"></div></div>'
-    +'<div style="display:flex;gap:8px;margin-top:8px"><button class="b" style="flex:1" onclick="doNAdd()">Ekle</button><button class="b s" style="flex:1" onclick="document.getElementById(\'nAddArea\').innerHTML=\'\'">İptal</button></div></div>';
+function qoHesap(){
+  var tA=0,tD=0;
+  (window._qoRows||[]).forEach(function(s,i){ var sd=s.adet*s.fiyat*(1+s.kdv/100); tA+=s.adet; tD+=sd; var el=document.getElementById('qoSat'+i); if(el) el.textContent=s.adet>0?('Satır: '+TL(sd)+' (KDV dahil)'):''; });
+  var t=document.getElementById('qoToplam'); if(t) t.textContent='Toplam: '+AD(tA)+' adet · '+TL(tD)+' (KDV dahil)';
 }
-function naFill(){const s=document.getElementById('naSel');if(!s||!s.value)return;const o=s.options[s.selectedIndex];
-  const kdv=parseFloat(o.getAttribute('data-kdv'))||1;const haric=parseFloat(o.getAttribute('data-fiy'))||0;
-  document.getElementById('naAd').value=o.getAttribute('data-ad')||'';document.getElementById('naFiy').value=haric?(+haric.toFixed(2)):'';document.getElementById('naKdv').value=kdv;}
-function doNAdd(){
-  const sel=document.getElementById('naSel');const uid=sel&&sel.value?sel.value:null;
-  if(!uid){alert('Yalnızca firma kataloğundaki ürünler siparişe eklenebilir');return;}
-  const ad=(document.getElementById('naAd').value||'').trim();
-  const f=+(parseFloat(document.getElementById('naFiy').value)||0).toFixed(2); // KDV hariç — doğrudan saklanır
-  const k=parseFloat(document.getElementById('naKdv').value)||1;
-  const a=parseInt(document.getElementById('naAdet').value)||1;
-  if(!ad){alert('Ürün adı gir');return;}if(f<=0){alert('Satış fiyatı gir (KDV hariç)');return;}
-  if(window._ns.some(s=>s.ad===ad)){alert(ad+' zaten listede');return;}
-  window._ns.push({uid,ad,f,k,a});
-  document.getElementById('nAddArea').innerHTML='';rNR();
+async function qoSave(){
+  var dolu=(window._qoRows||[]).filter(function(s){return s.adet>0;});
+  if(!dolu.length){ alert('En az bir ürüne adet gir'); return; }
+  if(dolu.some(function(s){return !s.urun_id;})){ alert('Yalnızca firma kataloğundaki ürünler eklenebilir'); return; }
+  var btn=document.getElementById('qoSaveBtn'); if(btn){btn.disabled=true;btn.textContent='Kaydediliyor...';}
+  var who='Firma Yönetim'; try{ var u=await sb.auth.getUser(); if(u.data&&u.data.user&&u.data.user.email) who=u.data.user.email; }catch(e){}
+  // siparisler insert — index.html kaydetSiparis BİREBİR; toplam/kâr/cari ELLE YAZILMAZ (trigger hesaplar)
+  var r=await sb.from('siparisler').insert({firma_id:cF,tarih:window._qoDay,teslim_tarihi:window._qoDay,durum:'bekleyen',created_by:who,last_updated_by:who}).select().single();
+  if(r.error){ if(btn){btn.disabled=false;btn.textContent='Kaydet';} alert('Hata: '+r.error.message); return; }
+  var kalemler=dolu.map(function(s){return {siparis_id:r.data.id,urun_id:s.urun_id,urun_ad:s.ad,adet:s.adet,birim_fiyat_kdv_haric:s.fiyat,kdv_orani:s.kdv};});
+  var rk=await sb.from('siparis_kalemleri').insert(kalemler);
+  if(rk.error){ if(btn){btn.disabled=false;btn.textContent='Kaydet';} alert('Kalem hatası: '+rk.error.message); return; }
+  await qoRender(window._qoDay); // modal açık kalır, mevcut liste yenilenir, adetler sıfırlanır
 }
-
-async function saveN(tarih){const dolu=window._ns.filter(s=>s.a>0);if(!dolu.length){alert('En az bir ürüne adet gir');return;}
-  if(dolu.some(s=>!s.uid)){alert('Yalnızca firma kataloğundaki ürünler siparişe eklenebilir (katalog dışı kalem engellendi)');return;}
-  const{data:sip,error}=await sb.from('siparisler').insert({firma_id:cF,tarih,durum:'tamamlandi',fatura_durumu:'bekliyor',created_by:'Firma Yönetim'}).select().single();
-  if(error){alert(error.message);return;}
-  await sb.from('siparis_kalemleri').insert(dolu.map(s=>({siparis_id:sip.id,urun_id:s.uid,urun_ad:s.ad,adet:s.a,birim_fiyat_kdv_haric:s.f,kdv_orani:s.k})));
-  closeMo();render();
-}
+function qoNextDay(){ var d=new Date(window._qoDay+'T00:00:00'); d.setDate(d.getDate()+1); openDay(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')); }
 </script>
 </body>
 </html>
