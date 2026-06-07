@@ -5,8 +5,8 @@
 <title>Bardaks B2B — Firma Yönetim</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{--bg:#0f1115;--s:#181b22;--s2:#1f232c;--bd:#2a2f3a;--tx:#e8eaed;--dm:#9aa0ac;--ac:#d4a04f;--gn:#4caf7d;--rd:#e05c5c;--r:12px}
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx);font-size:15px;line-height:1.5}
+:root{--bg:#171a21;--s:#1e222b;--s2:#262b35;--bd:#313846;--tx:#e6e8ee;--dm:#9aa2b1;--ac:#d8a85b;--gn:#56b98a;--rd:#e36a6a;--r:12px;--sh:0 1px 3px rgba(0,0,0,.25)}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
 .top{position:sticky;top:0;z-index:30;background:var(--s);border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;padding:12px 16px;flex-wrap:wrap;gap:8px}
 .logo{font-size:17px;font-weight:800;color:var(--ac)} .logo span{color:var(--tx)}
 .w{max-width:750px;margin:0 auto;padding:12px}
@@ -15,7 +15,27 @@ select:focus,input:focus{outline:none;border-color:var(--ac)}
 .b{background:var(--ac);color:#1a1208;border:none;font-weight:700;padding:10px 16px;border-radius:9px;cursor:pointer;font-size:14px;display:inline-block}
 .b.s{background:var(--s2);color:var(--tx);border:1px solid var(--bd)} .b.d{background:var(--rd);color:#fff} .b.g{background:var(--gn);color:#fff}
 .b.full{width:100%;text-align:center}
-.card{background:var(--s);border:1px solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:10px}
+.card{background:var(--s);border:1px solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:10px;box-shadow:var(--sh)}
+/* UI-REFINEMENT-V1 */
+.crumb{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dm);margin:2px 2px 10px}
+.crumb a{color:var(--dm);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:7px;transition:.15s}
+.crumb a:hover{color:var(--tx);background:var(--s2)}
+.crumb .sep{opacity:.5} .crumb .cur{color:var(--tx);font-weight:600}
+.hero{background:linear-gradient(180deg,var(--s2),var(--s));border:1px solid var(--bd);border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 4px 16px rgba(0,0,0,.28);position:relative;overflow:hidden}
+.hero.s-rd{border-color:#5a2e2e;background:linear-gradient(180deg,#2c2024,var(--s))}
+.hero.s-gn{border-color:#2e5343;background:linear-gradient(180deg,#1e2a26,var(--s))}
+.hero-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.hero-lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--dm);font-weight:700}
+.hero-score{font-size:13px;color:var(--dm)} .hero-score b{font-size:18px}
+.badge{display:inline-flex;align-items:center;gap:7px;font-size:20px;font-weight:800;margin-top:10px;padding:6px 14px;border-radius:999px;line-height:1}
+.badge.rd{background:rgba(227,106,106,.16);color:var(--rd)} .badge.gn{background:rgba(86,185,138,.16);color:var(--gn)} .badge.nt{background:var(--s2);color:var(--dm)}
+.hero-reason{font-size:14px;color:var(--tx);margin-top:12px;line-height:1.5}
+.hero-act{display:block;width:100%;text-align:center;margin-top:14px;padding:13px;border-radius:10px;font-weight:800;font-size:15px;border:none;cursor:pointer}
+.hero-act.call{background:var(--rd);color:#fff;box-shadow:0 2px 10px rgba(227,106,106,.35)}
+.hero-act.calm{background:var(--s2);color:var(--gn);border:1px solid var(--bd)}
+.hero-meta{margin-top:14px;border-top:1px solid var(--bd);padding-top:10px}
+.l2{border-left:3px solid var(--ac)} .l2 b{color:var(--ac)}
+.lvl4{opacity:.92}
 .warn{background:#3a2f1c;border:1px solid var(--ac);border-radius:var(--r);padding:12px;margin-bottom:10px;font-size:13px}
 .warn b{color:var(--ac)}
 label{display:block;font-size:12px;color:var(--dm);margin:8px 0 4px}
@@ -105,6 +125,7 @@ table.rpt tr.t td{font-weight:700;background:var(--s2)}
   <div id="le" style="font-size:13px;margin-top:8px"></div>
 </div>
 <div id="app" class="w" style="display:none">
+  <nav class="crumb"><a href="index.html">← Komuta Merkezi</a><span class="sep">/</span><span class="cur">Firma Dosyası</span></nav>
   <div class="card" style="padding:10px 14px">
     <select id="selF" onchange="onFirma()" style="font-weight:700;font-size:16px;border:none;background:transparent;color:var(--ac)"></select>
   </div>
@@ -338,24 +359,30 @@ async function renderOzet(){
   var tasks=bkTasks({pulse:pulse,firmaAd:firmaAd,maliyetEksik:maliyetEksik,vergiVar:vergiVar,fiyatEksik:fiyatEksik,kalan:kalan});
 
   var h='';
-  // 1) MÜŞTERİ NABZI (imza — ne olacak / ne yapmalıyım)
-  var skorRenk=health.score>=85?'--gn':health.score>=70?'--ac':'--rd';
-  h+='<div class="card" style="border:1px solid var(--ac)"><div style="display:flex;justify-content:space-between;align-items:center"><b>📡 Müşteri Nabzı</b><span style="font-size:20px;font-weight:800;color:var('+skorRenk+')">'+health.score+'<span style="font-size:11px;color:var(--dm)">/100</span></span></div>';
-  if(pulse.yeterli){
-    h+='<table class="rpt" style="margin-top:6px">'
-      +'<tr><td>Sipariş alışkanlığı</td><td class="n">'+pulse.habit+' (~'+(pulse.med%1?pulse.med.toFixed(1):pulse.med)+' gün)</td></tr>'
-      +'<tr><td>Son sipariş</td><td class="n">'+(g.son_siparis?trd(g.son_siparis):'—')+'</td></tr>'
-      +'<tr><td>Beklenen sipariş</td><td class="n">'+trd(_isoLocal(pulse.expected))+'</td></tr>'
-      +'<tr><td>Son sessizlik</td><td class="n" style="color:var('+(pulse.normalDisi?'--rd':'--gn')+')">'+pulse.sonSessizlik+' gün</td></tr>'
-      +'<tr><td>Güven</td><td class="n">'+pulse.guven+'</td></tr></table>';
-    if(pulse.normalDisi) h+='<div style="margin-top:8px;padding:8px 10px;background:#3a1c1c;border-radius:8px;color:var(--rd);font-size:13px"><b>☎ '+esc(firmaAd)+'’i ara.</b> Normal sipariş ritminin dışında.</div>';
-    else h+='<div style="margin-top:8px;padding:8px 10px;background:var(--s2);border-radius:8px;color:var(--gn);font-size:13px">✓ Sipariş ritmi normal — bekle.</div>';
+  // 1) MÜŞTERİ NABZI — HERO (durum + sebep + tek aksiyon). Mantık değişmez; pulse'tan türetilir.
+  var heroCls,badgeCls,badgeTxt,reason,actHtml;
+  if(!pulse.yeterli){
+    heroCls='';badgeCls='nt';badgeTxt='⚪ VERİ YOK';
+    reason='Nabız için yeterli sipariş geçmişi yok (en az 3 sipariş). Veri girilince otomatik hesaplanır.';
+    actHtml='';
+  } else if(pulse.normalDisi){
+    heroCls=' s-rd';badgeCls='rd';badgeTxt='🔴 ARA';
+    reason='Normal sipariş ritminin dışında — son sessizlik <b>'+pulse.sonSessizlik+' gün</b> (alışkanlık ~'+(pulse.med%1?pulse.med.toFixed(1):pulse.med)+' gün). Beklenen sipariş '+trd(_isoLocal(pulse.expected))+' idi.';
+    actHtml='<button class="hero-act call" onclick="openRel()">☎ '+esc(firmaAd)+'’i ara · görüşmeyi kaydet</button>';
   } else {
-    h+='<div style="color:var(--dm);font-size:13px;margin-top:6px">Nabız için yeterli sipariş geçmişi yok (en az 3 sipariş). Veri girilince otomatik hesaplanır.</div>';
+    heroCls=' s-gn';badgeCls='gn';badgeTxt='🟢 NORMAL';
+    reason='Sipariş ritmi normal — son sessizlik '+pulse.sonSessizlik+' gün, beklenen sipariş '+trd(_isoLocal(pulse.expected))+'. Şimdilik bekle.';
+    actHtml='<div class="hero-act calm">✓ Aksiyon gerekmiyor — ritim normal</div>';
   }
-  h+='</div>';
+  h+='<div class="hero'+heroCls+'">'
+    +'<div class="hero-top"><span class="hero-lbl">📡 Müşteri Nabzı</span>'
+    +(pulse.yeterli?'<span class="hero-score">Sağlık <b style="color:var('+(health.score>=85?'--gn':health.score>=70?'--ac':'--rd')+')">'+health.score+'</b>/100 · güven '+pulse.guven+'</span>':'')+'</div>'
+    +'<div class="badge '+badgeCls+'">'+badgeTxt+'</div>'
+    +'<div class="hero-reason">'+reason+'</div>'
+    +actHtml
+    +'</div>';
   // 2) BUGÜN YAPILACAKLAR (ne yapmalıyım)
-  h+='<div class="card"><b>✅ Bugün Yapılacaklar</b>';
+  h+='<div class="card l2"><b>✅ Bugün Yapılacaklar</b>';
   if(tasks.length){h+='<div style="margin-top:6px">'+tasks.map(function(t){return '<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--bd)"><span style="color:var('+t.clr+')">'+t.ico+'</span><span style="font-size:13px;flex:1">'+t.text+'</span></div>';}).join('')+'</div>';}
   else h+='<div style="color:var(--gn);font-size:13px;margin-top:6px">✓ Bekleyen görev yok.</div>';
   h+='</div>';
@@ -385,7 +412,7 @@ async function renderOzet(){
     +kpi('Ort. Sipariş',TL(g.ort_siparis_tutari||0))
     +'</div>'+(maliyetEksik>0?'<div style="font-size:11px;color:var(--rd);margin-top:6px">⚠️ '+maliyetEksik+' üründe maliyet eksik — kâr yüksek görünebilir.</div>':'')+'</div>';
   // 6) FİRMA HAFIZASI (ne oldu — şirket hafızası)
-  h+='<div class="card"><b>🧠 Firma Hafızası</b><table class="rpt">'
+  h+='<div class="card lvl4"><b>🧠 Firma Hafızası</b><table class="rpt">'
     +'<tr><td>İlk Sipariş</td><td class="n">'+(g.ilk_siparis?trd(g.ilk_siparis):'—')+'</td></tr>'
     +'<tr><td>Son Sipariş</td><td class="n">'+(g.son_siparis?trd(g.son_siparis):'—')+'</td></tr>'
     +'<tr><td>Toplam Sipariş</td><td class="n">'+AD(toplamSip)+'</td></tr>'
@@ -407,14 +434,14 @@ async function renderOzet(){
   } else h+='<div style="color:var(--dm);font-size:13px;margin-top:4px">Henüz görüşme kaydı yok</div>';
   h+='</div>';
   // 8) ÜRÜN DAVRANIŞI
-  h+='<div class="card"><b>Ürün Davranışı</b>';
+  h+='<div class="card lvl4"><b>Ürün Davranışı</b>';
   if(top3.length){h+='<div style="font-size:12px;color:var(--dm);margin-top:6px">En çok (son 12 ay)</div><table class="rpt">'
     +top3.map(function(e){return '<tr><td>'+esc(e[0])+'</td><td class="n">'+AD(e[1])+' adet</td></tr>';}).join('')+'</table>';}
   if(sonUrun.length){h+='<div style="font-size:12px;color:var(--dm);margin-top:6px">Son alınan</div><div style="font-size:13px;margin-top:2px">'+sonUrun.map(esc).join(', ')+'</div>';}
   if(!top3.length&&!sonUrun.length){h+='<div style="color:var(--dm);font-size:13px;margin-top:6px">Son 12 ayda ürün hareketi yok.</div>';}
   h+='</div>';
   // 9) OPERASYON
-  h+='<div class="card"><b>Operasyon</b><table class="rpt">'
+  h+='<div class="card lvl4"><b>Operasyon</b><table class="rpt">'
     +'<tr><td>Aktif Sipariş</td><td class="n">'+(aktifSip>0?aktifSip+' adet':'yok')+'</td></tr>'
     +'<tr><td>Bekleyen Çek</td><td class="n">'+(bekCek>0?bekCek+' adet':'yok')+'</td></tr>'
     +(fiyatEksik>0?'<tr><td>Fiyatı tanımsız satış ürünü</td><td class="n" style="color:var(--rd)">'+fiyatEksik+'</td></tr>':'')
