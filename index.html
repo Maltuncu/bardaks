@@ -1462,7 +1462,7 @@ async function renderUrunler(){
       const birimTxt = escapeHtml(u.birim||'adet');
       const maliyetTxt = Number(u.birim_maliyet)>0 ? 'Maliyet '+TL(u.birim_maliyet) : '<span style="color:var(--red)">maliyet yok</span>';
       const eklenme = u.olusturma ? 'Eklendi: '+trDate(u.olusturma) : '';
-      html += '<div class="urun-kart"'+(u.aktif===false?' style="opacity:.6"':'')+'><div class="urun-foto" id="foto-'+u.id+'">'+foto+'<button class="foto-btn" onclick="secFoto(\''+u.id+'\')">📷 '+(u.gorsel_url?'Değiştir':'Foto')+'</button></div><div class="urun-body"><div class="urun-ad">'+escapeHtml(u.ad)+rozet+'</div>'+gramaj+'<div class="urun-fiyat">'+fiyat+'</div><div class="urun-meta">'+birimTxt+' · '+maliyetTxt+'</div>'+(eklenme?'<div class="urun-meta" style="font-size:11px">'+eklenme+'</div>':'')+'</div><div class="urun-actions"><button class="btn btn-sec btn-sm" onclick="openUrunDuzenle(\''+u.id+'\')">✏️ Düzenle</button></div></div>';
+      html += '<div class="urun-kart"'+(u.aktif===false?' style="opacity:.6"':'')+'><div class="urun-foto" id="foto-'+u.id+'">'+foto+'<button class="foto-btn" onclick="secFoto(\''+u.id+'\')">📷 '+(u.gorsel_url?'Değiştir':'Foto')+'</button></div><div class="urun-body"><div class="urun-ad">'+escapeHtml(u.ad)+rozet+'</div>'+gramaj+'<div class="urun-fiyat">'+fiyat+'</div><div class="urun-meta">'+birimTxt+' · '+maliyetTxt+'</div>'+(eklenme?'<div class="urun-meta" style="font-size:11px">'+eklenme+'</div>':'')+'</div><div class="urun-actions"><button class="btn btn-sec btn-sm" onclick="openUrunDetay(\''+u.id+'\')">🔍 Detay</button><button class="btn btn-sec btn-sm" onclick="openUrunDuzenle(\''+u.id+'\')">✏️ Düzenle</button></div></div>';
     });
     html += '</div>';
   });
@@ -1572,6 +1572,78 @@ async function kaydetUrunDuzenle(urunId){
   const r = await sb.from('urunler').update(rec).eq('id',urunId);
   if(r.error){ alert('Hata: '+r.error.message); return; }
   closeModal(); toast('✅ Güncellendi',rec.ad); renderUrunler();
+}
+/* ========== ÜRÜN DETAY (Adım 3 — urun_tipi salt-okuma) ========== */
+function urunTipiRozet(t){
+  var m={SATIS_URUNU:['Satış Ürünü','rgba(86,185,138,.16)','#56b98a'],HAMMADDE:['Hammadde','rgba(216,168,91,.16)','#d8a85b'],YARI_MAMUL:['Yarı Mamul','rgba(224,192,96,.16)','#e0c060']};
+  var x=m[t]||['Tip yok','var(--surface2)','var(--text-dim)'];
+  return '<span style="background:'+x[1]+';color:'+x[2]+';padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">'+x[0]+'</span>';
+}
+async function openUrunDetay(urunId){
+  openModal('<div class="modal-head"><h3>🔍 Ürün Detayı</h3><button class="modal-close" onclick="closeModal()">×</button></div><div class="loading">Yükleniyor…</div>');
+  var ru=await sb.from('urunler').select('*').eq('id',urunId).single();
+  var u=ru.data; if(!u){ openModal('<div class="modal-head"><h3>Ürün bulunamadı</h3><button class="modal-close" onclick="closeModal()">×</button></div>'); return; }
+  var res=await Promise.all([
+    sb.from('aktif_firma_fiyatlari').select('firma_ad,birim_fiyat_kdv_haric,birim_fiyat_kdv_dahil').eq('urun_id',urunId),
+    sb.from('firma_urun_fiyat').select('firma_id,birim_fiyat_kdv_haric,gecerlilik_baslangic,gecerlilik_bitis').eq('urun_id',urunId).eq('is_deleted',false).order('gecerlilik_baslangic'),
+    sb.from('v_urun_tarihce').select('*').eq('urun_id',urunId).maybeSingle(),
+    sb.from('v_urun_firma').select('firma_ad,toplam_adet,toplam_dahil').eq('urun_ad',u.ad).order('toplam_dahil',{ascending:false}),
+    sb.from('firmalar').select('id,ad').eq('is_deleted',false)
+  ]);
+  var fiyatlar=res[0].data||[], gecmis=res[1].data||[], th=(res[2]&&res[2].data)||null, kf=res[3].data||[], firmalar=res[4].data||[];
+  var fMap={}; firmalar.forEach(function(f){fMap[f.id]=f.ad;});
+  var EMPTY='<div style="color:var(--text-dim);font-size:13px;padding:6px 0">Henüz kayıt yok</div>';
+  var foto=u.gorsel_url?'<img src="'+u.gorsel_url+'" alt="" style="width:100%;height:100%;object-fit:cover">':'🍰';
+  var h='<div class="modal-head"><h3>🔍 '+escapeHtml(u.ad)+'</h3><button class="modal-close" onclick="closeModal()">×</button></div>';
+  // üst: görsel + rozetler
+  h+='<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px"><div class="urun-foto" id="foto-'+u.id+'" style="width:90px;height:90px;flex-shrink:0;font-size:30px">'+foto+'<button class="foto-btn" onclick="secFoto(\''+u.id+'\')">📷</button></div>';
+  h+='<div style="flex:1"><div style="margin-bottom:6px">'+urunTipiRozet(u.urun_tipi)+(u.aktif===false?' <span class="tag tag-red">Pasif</span>':' <span class="tag" style="background:rgba(86,185,138,.16);color:#56b98a">Aktif</span>')+'</div>';
+  h+='<div style="font-size:13px;color:var(--text-dim)">Kategori / aile: <b style="color:var(--text)">'+escapeHtml(u.kategori||'—')+'</b> <span style="font-size:11px">(salt-okuma)</span></div>';
+  h+='<div style="font-size:13px;color:var(--text-dim)">Birim: '+escapeHtml(u.birim||'adet')+(Number(u.birim_maliyet)>0?' · Maliyet '+TL(u.birim_maliyet):'')+'</div>';
+  if(u.varsayilan_fiyat) h+='<div style="font-size:11px;color:var(--text-dim);margin-top:2px">öneri fiyat (legacy): '+TL(u.varsayilan_fiyat)+' — ana fiyat firma bazlıdır</div>';
+  h+='</div></div>';
+  // düzenlenebilir alanlar
+  h+='<div class="card-title">📝 Ürün Kartı (düzenlenebilir)</div>';
+  h+='<label>Gramaj</label><input id="udGramaj" value="'+escapeHtml(u.gramaj||'')+'" placeholder="örn: 200gr">';
+  h+='<label>Açıklama</label><textarea id="udAciklama" placeholder="Müşteriye gösterilecek açıklama">'+escapeHtml(u.aciklama||'')+'</textarea>';
+  h+='<label>İçerik</label><textarea id="udIcerik" placeholder="İçindekiler">'+escapeHtml(u.icerik||'')+'</textarea>';
+  h+='<label>Raf Ömrü</label><textarea id="udRaf" placeholder="örn: 3 gün buzdolabında">'+escapeHtml(u.raf_omru||'')+'</textarea>';
+  h+='<label>Üretim Notu</label><textarea id="udNotlar" placeholder="opsiyonel">'+escapeHtml(u.notlar||'')+'</textarea>';
+  h+='<button class="btn btn-block mt" onclick="kaydetUrunDetay(\''+u.id+'\')">💾 Kart Bilgilerini Kaydet</button>';
+  h+='<div style="font-size:11px;color:var(--text-dim);margin-top:6px">Ürün tipi (Hammadde/Yarı Mamul/Satış Ürünü) burada DEĞİŞTİRİLEMEZ — ayrı "Kategori Düzeltme" akışı gerekir.</div>';
+  // firma bazlı fiyatlar (BİRİNCİL)
+  h+='<div class="card-title mt">💵 Firma Bazlı Fiyatlar (güncel)</div>';
+  if(fiyatlar.length){ h+='<div class="table-wrap"><table><tr><th>Firma</th><th>KDV Hariç</th><th>KDV Dahil</th></tr>'+fiyatlar.map(function(p){return '<tr><td>'+escapeHtml(p.firma_ad||'—')+'</td><td>'+TL(p.birim_fiyat_kdv_haric)+'</td><td>'+TL(p.birim_fiyat_kdv_dahil)+'</td></tr>';}).join('')+'</table></div>'; } else h+=EMPTY;
+  // zam geçmişi
+  h+='<div class="card-title mt">📈 Zam Geçmişi (firma bazlı)</div>';
+  if(gecmis.length){ h+='<div class="table-wrap"><table><tr><th>Firma</th><th>Fiyat (Hariç)</th><th>Başlangıç</th><th>Bitiş</th></tr>'+gecmis.map(function(g){return '<tr><td>'+escapeHtml(fMap[g.firma_id]||'—')+'</td><td>'+TL(g.birim_fiyat_kdv_haric)+'</td><td>'+(g.gecerlilik_baslangic?trDate(g.gecerlilik_baslangic):'—')+'</td><td>'+(g.gecerlilik_bitis?trDate(g.gecerlilik_bitis):'<span style="color:#56b98a">aktif</span>')+'</td></tr>';}).join('')+'</table></div>'; } else h+=EMPTY;
+  // kullanan firmalar
+  h+='<div class="card-title mt">🏢 Kullanan Firmalar</div>';
+  if(kf.length){ h+='<div class="table-wrap"><table><tr><th>Firma</th><th>Toplam Adet</th><th>Toplam (Dahil)</th></tr>'+kf.map(function(k){return '<tr><td>'+escapeHtml(k.firma_ad||'—')+'</td><td>'+(k.toplam_adet||0)+'</td><td>'+TL(k.toplam_dahil||0)+'</td></tr>';}).join('')+'</table></div>'; } else h+=EMPTY;
+  // sipariş geçmişi / toplam
+  h+='<div class="card-title mt">📦 Sipariş Geçmişi</div>';
+  if(th && (th.toplam_adet||th.siparis_sayisi)){ h+='<div class="table-wrap"><table>'
+    +'<tr><td>Toplam Adet</td><td>'+(th.toplam_adet||0)+'</td></tr>'
+    +'<tr><td>Toplam Ciro (Dahil)</td><td>'+TL(th.toplam_dahil||0)+'</td></tr>'
+    +'<tr><td>Sipariş Sayısı</td><td>'+(th.siparis_sayisi||0)+'</td></tr>'
+    +'<tr><td>İlk Satış</td><td>'+(th.ilk_satis?trDate(th.ilk_satis):'—')+'</td></tr>'
+    +'<tr><td>Son Sipariş</td><td>'+(th.son_satis?trDate(th.son_satis):'—')+'</td></tr>'
+    +'</table></div>'; } else h+=EMPTY;
+  openModal(h);
+}
+async function kaydetUrunDetay(urunId){
+  var rec={
+    gramaj:(document.getElementById('udGramaj').value||'').trim()||null,
+    aciklama:(document.getElementById('udAciklama').value||'').trim()||null,
+    icerik:(document.getElementById('udIcerik').value||'').trim()||null,
+    raf_omru:(document.getElementById('udRaf').value||'').trim()||null,
+    notlar:(document.getElementById('udNotlar').value||'').trim()||null,
+    guncelleme:new Date().toISOString()
+  };
+  var r=await sb.from('urunler').update(rec).eq('id',urunId);
+  if(r.error){ alert('Hata: '+r.error.message); return; }
+  toast('✅ Kart kaydedildi','');
+  openUrunDetay(urunId);
 }
 /* ========== FİYAT LİSTESİ OLUŞTURUCU ========== */
 var flUrunler = [];
