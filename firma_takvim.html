@@ -253,10 +253,54 @@ function renderTeklif(){
       +'<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:20px;font-weight:800;color:var(--ac)">bardak\'s</div><div style="font-size:13px;color:var(--dm)">TEKLİF</div></div><div style="text-align:right;font-size:12px"><div style="font-weight:700">'+esc(fad)+'</div><div style="color:var(--dm)">'+trd(_isoLocal(new Date()))+'</div></div></div></div>'
       +'<div class="card">'+(rows||'<div style="color:var(--dm)">Ürün yok</div>')+'</div>'
       +'<div class="card"><table class="rpt"><tr><td>Ara Toplam (KDV hariç)</td><td class="n">'+TL(aH)+'</td></tr><tr><td>KDV</td><td class="n">'+TL(aK)+'</td></tr><tr class="t"><td>GENEL TOPLAM (KDV dahil)</td><td class="n">'+TL(aD)+'</td></tr></table><div style="font-size:11px;color:var(--dm);margin-top:6px">Bu bir tekliftir; sipariş/fatura değildir.</div></div></div>';
-    foot.innerHTML='<button class="b s" onclick="tkStep(2)">‹ Düzenle</button><button class="b" onclick="teklifYazdir()">🖨️ PDF / Yazdır</button>';
+    foot.innerHTML='<button class="b s" onclick="tkStep(2)">‹ Düzenle</button><button class="b g" onclick="teklifKaydet(this)">💾 Kaydet</button><button class="b" onclick="teklifYazdir()">🖨️ Yazdır</button>';
   }
 }
 function teklifYazdir(){document.body.classList.add('print-teklif');window.print();setTimeout(function(){document.body.classList.remove('print-teklif');},500);}
+// ═══ TEKLİF KAYDET (DB) — snapshot fiyat; toplamlar trigger ile; sipariş/cari mutation YOK ═══
+async function teklifKaydet(btn){
+  if(!cF){alert('Önce firma seç');return;}
+  var sel=_teklif.filter(function(t){return t.sec&&t.adet>0;});
+  if(!sel.length){alert('Kaydedilecek kalem yok — en az bir ürün/adet seç');return;}
+  if(btn){btn.disabled=true;btn.textContent='Kaydediliyor…';}
+  try{
+    var ins=await sb.from('teklifler').insert({firma_id:cF,durum:'taslak'}).select('id,teklif_no').single();
+    if(ins.error) throw ins.error;
+    var tid=ins.data.id;
+    var kalemler=sel.map(function(t){return {teklif_id:tid,urun_id:t.uid,adet:t.adet,birim_fiyat_kdv_haric:t.fiyat,kdv_orani:t.kdv};});
+    var ik=await sb.from('teklif_kalemleri').insert(kalemler);
+    if(ik.error) throw ik.error;
+    var rb=await sb.from('teklifler').select('teklif_no,genel_toplam_kdv_dahil').eq('id',tid).single();
+    var no=(rb.data&&rb.data.teklif_no)||ins.data.teklif_no||'—';
+    var gt=(rb.data&&rb.data.genel_toplam_kdv_dahil)||0;
+    alert('✅ Teklif kaydedildi\n'+no+'\nGenel Toplam (KDV dahil): '+TL(gt));
+    closeTeklif(); if(cTab==='ozet')renderOzet();
+  }catch(e){ alert('Teklif kaydedilemedi: '+(e.message||e)); }
+  finally{ if(btn){btn.disabled=false;btn.textContent='💾 Kaydet';} }
+}
+async function renderTeklifGecmisi(fid){
+  var el=document.getElementById('teklifGecmisi'); if(!el) return;
+  var r=await sb.from('teklifler').select('id,teklif_no,tarih,genel_toplam_kdv_dahil,durum').eq('firma_id',fid).eq('is_deleted',false).order('tarih',{ascending:false}).order('created_at',{ascending:false}).limit(5);
+  var d=r.data||[];
+  var h='<div class="card lvl4"><b>📄 Teklifler</b>';
+  if(!d.length){ h+='<div style="color:var(--dm);font-size:13px;margin-top:6px">Henüz kayıtlı teklif yok — Özet üstündeki “📄 Teklif Oluştur” ile hazırla.</div>'; }
+  else { h+='<table class="rpt" style="margin-top:6px"><tr><th>No</th><th>Tarih</th><th class="n">Tutar</th><th>Durum</th></tr>'+d.map(function(t){return '<tr style="cursor:pointer" onclick="openKayitliTeklif(\''+t.id+'\')"><td>'+esc(t.teklif_no||'—')+'</td><td>'+(t.tarih?trd(t.tarih):'—')+'</td><td class="n">'+TL(t.genel_toplam_kdv_dahil||0)+'</td><td>'+esc(t.durum||'')+'</td></tr>';}).join('')+'</table><div style="font-size:11px;color:var(--dm);margin-top:4px">Teklife tıkla → görüntüle</div>'; }
+  h+='</div>';
+  el.innerHTML=h;
+}
+async function openKayitliTeklif(tid){
+  var rt=await sb.from('teklifler').select('*').eq('id',tid).single();
+  var t=rt.data; if(!t){alert('Teklif bulunamadı');return;}
+  var rk=await sb.from('teklif_kalemleri').select('*').eq('teklif_id',tid);
+  var kl=rk.data||[];
+  var nameMap={}; UR.forEach(function(u){nameMap[u.id]=u.ad;});
+  var fad=(F.find(function(f){return f.id===t.firma_id;})||{}).ad||'';
+  var rows=kl.map(function(k){return '<div class="tk-prev-item"><div class="tk-ph">📦</div><div style="flex:1"><div style="font-weight:600">'+esc(nameMap[k.urun_id]||'Ürün')+'</div><div style="font-size:11px;color:var(--dm)">'+k.adet+' × '+TL(k.birim_fiyat_kdv_haric)+' (KDV hariç)</div></div><div style="text-align:right;font-weight:700">'+TL(k.satir_toplam_kdv_dahil)+'</div></div>';}).join('');
+  document.getElementById('tk-title').textContent='📄 '+(t.teklif_no||'Teklif');
+  document.getElementById('tk-body').innerHTML='<div id="tkPrint"><div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-size:20px;font-weight:800;color:var(--ac)">bardak\'s</div><div style="font-size:13px;color:var(--dm)">TEKLİF · '+esc(t.teklif_no||'')+'</div></div><div style="text-align:right;font-size:12px"><div style="font-weight:700">'+esc(fad)+'</div><div style="color:var(--dm)">'+(t.tarih?trd(t.tarih):'')+'</div></div></div></div><div class="card">'+(rows||'<div style="color:var(--dm)">Kalem yok</div>')+'</div><div class="card"><table class="rpt"><tr><td>Ara Toplam (KDV hariç)</td><td class="n">'+TL(t.ara_toplam_kdv_haric||0)+'</td></tr><tr><td>KDV</td><td class="n">'+TL(t.kdv_toplam||0)+'</td></tr><tr class="t"><td>GENEL TOPLAM (KDV dahil)</td><td class="n">'+TL(t.genel_toplam_kdv_dahil||0)+'</td></tr></table><div style="font-size:11px;color:var(--dm);margin-top:6px">Kayıtlı teklif · salt-okuma · durum: '+esc(t.durum||'')+'</div></div></div>';
+  document.getElementById('tk-foot').innerHTML='<button class="b s" onclick="closeTeklif()">Kapat</button><button class="b" onclick="teklifYazdir()">🖨️ Yazdır</button>';
+  document.getElementById('tk-ov').classList.add('open');
+}
 
 // ═══ 📊 ÖZET (Firma Merkezi ana ekran — 5 kart) ═══
 // ═══ DİJİTAL İKİZ — yeniden kullanılabilir karar fonksiyonları (Komuta Merkezi de kullanır) ═══
@@ -446,7 +490,10 @@ async function renderOzet(){
     +'<tr><td>Bekleyen Çek</td><td class="n">'+(bekCek>0?bekCek+' adet':'yok')+'</td></tr>'
     +(fiyatEksik>0?'<tr><td>Fiyatı tanımsız satış ürünü</td><td class="n" style="color:var(--rd)">'+fiyatEksik+'</td></tr>':'')
     +'</table></div>';
+  // 10) TEKLİFLER (kayıtlı teklif geçmişi — async doldurulur)
+  h+='<div id="teklifGecmisi"></div>';
   c.innerHTML=h;
+  renderTeklifGecmisi(fid);
 }
 
 // ═══ 💳 BAKİYE / CARİ ═══
