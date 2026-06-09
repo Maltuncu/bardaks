@@ -397,12 +397,18 @@ window.addEventListener('DOMContentLoaded', async function(){
   }
 });
 
+const _renderTimers={};
+function scheduleRender(key, fn, delay){
+  delay=delay||250;
+  if(_renderTimers[key]) clearTimeout(_renderTimers[key]);
+  _renderTimers[key]=setTimeout(function(){ delete _renderTimers[key]; fn(); }, delay);
+}
 function initRealtime(){
   sb.channel('siparis-rt')
     .on('postgres_changes', {event:'*', schema:'public', table:'siparisler'}, function(payload){
-      if(document.getElementById('page-uretim').classList.contains('active')) renderUretim();
-      if(document.getElementById('page-siparis').classList.contains('active')) renderSiparis();
-      if(document.getElementById('page-panel').classList.contains('active')) renderPanel();
+      if(document.getElementById('page-uretim').classList.contains('active')) scheduleRender('uretim', renderUretim);
+      if(document.getElementById('page-siparis').classList.contains('active')) scheduleRender('siparis', renderSiparis);
+      if(document.getElementById('page-panel').classList.contains('active')) scheduleRender('panel', renderPanel);
       if((CURRENT.rol==='mudur'||CURRENT.rol==='admin') && payload.eventType==='UPDATE'){
         const o=payload.old, n=payload.new;
         if(o.durum!==n.durum){
@@ -417,8 +423,8 @@ function initRealtime(){
     })
     .on('postgres_changes', {event:'INSERT', schema:'public', table:'siparis_notlari'}, function(payload){
       if(payload.new.yazan !== CURRENT.ad_soyad){ toast('💬 Yeni not', payload.new.mesaj.slice(0,50)); }
-      if(document.getElementById('page-uretim').classList.contains('active')) renderUretim();
-      if(document.getElementById('page-siparis').classList.contains('active')) renderSiparis();
+      if(document.getElementById('page-uretim').classList.contains('active')) scheduleRender('uretim', renderUretim);
+      if(document.getElementById('page-siparis').classList.contains('active')) scheduleRender('siparis', renderSiparis);
     })
     .on('postgres_changes', {event:'INSERT', schema:'public', table:'gun_ozetleri'}, function(payload){
       if(CURRENT.rol==='admin' && payload.new.yazan!==CURRENT.ad_soyad){ toast('📋 Gün özeti geldi', payload.new.yazan+' bir özet yazdı'); }
