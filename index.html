@@ -1306,8 +1306,8 @@ async function yedekAl(){
   toast('✅ Yedek indirildi', today());
   yedekDurumGoster();
 }
-setInterval(function(){ if(CURRENT) refreshNotifs(); }, 30000);
-setInterval(function(){ if(CURRENT) refreshSohbetBadge(); }, 30000);
+setInterval(function(){ if(CURRENT && !document.hidden) refreshNotifs(); }, 30000);
+setInterval(function(){ if(CURRENT && !document.hidden) refreshSohbetBadge(); }, 30000);
 
 // ===== EKİP SOHBET =====
 async function refreshSohbetBadge(){

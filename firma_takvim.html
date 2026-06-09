@@ -378,6 +378,10 @@ async function renderOzet(){
     sb.from('siparisler').select('id,tarih,toplam_kdv_dahil').eq('firma_id',fid).eq('is_deleted',false).neq('durum','iptal').gte('tarih',bas12).order('tarih',{ascending:false}),
     sb.from('firmalar').select('resmi_unvan,vergi_no,vergi_dairesi').eq('id',fid).maybeSingle()
   ]);
+  if(res[0].error){
+    c.innerHTML='<div class="card" style="text-align:center;color:var(--dm);padding:24px">⚠ Veri yüklenemedi. <button class="b s" onclick="render()" style="margin-left:8px">Tekrar dene</button></div>';
+    return;
+  }
   var g=(res[0].data&&res[0].data[0])||{};
   var bekCek=res[1].count||0, aktifSip=res[2].count||0, sonTah=res[3].data&&res[3].data[0];
   var sip12=res[4].data||[]; var sids=sip12.map(function(s){return s.id;}); var sonSipId=sip12.length?sip12[0].id:null;
