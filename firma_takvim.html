@@ -183,7 +183,11 @@ async function reloadData(){
   ]);
   F=rf.data||[];UR=ru.data||[];FY=rp.data||[];
 }
-function onFirma(){cF=document.getElementById('selF').value;render();}
+async function onFirma(){cF=document.getElementById('selF').value;
+  try{const r=await sb.from('siparisler').select('tarih').eq('firma_id',cF).eq('is_deleted',false).neq('durum','iptal').order('tarih',{ascending:false}).limit(1);
+    const s=r.data&&r.data[0]&&r.data[0].tarih;curMo=s?new Date(+s.slice(0,4),+s.slice(5,7)-1,1):new Date();
+  }catch(e){curMo=new Date();}
+  render();}
 function setTab(t){cTab=t;document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('on',['ozet','fiyat','takvim','tahsilat','cek','bakiye','rapor','gecmis'][i]===t));render();}
 function render(){var pw=document.getElementById('priceWarn');if(pw&&cTab!=='fiyat')pw.innerHTML='';
   if(cTab==='ozet')renderOzet();else if(cTab==='takvim')renderTakvim();else if(cTab==='rapor')renderRapor();else if(cTab==='fiyat')renderFiyat();else if(cTab==='gecmis')renderGecmis();
@@ -624,7 +628,7 @@ async function renderTakvim(){
   for(let i=0;i<bg;i++)h+='<div class="cal-d empty"></div>';
   for(let d=1;d<=son.getDate();d++){const t=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');const v=dm[t];
     h+='<div class="cal-d'+(t===td?' today':'')+(v?' has':'')+'" onclick="openDay(\''+t+'\')"><div class="dn">'+d+'</div>'+(v?'<div class="di"><b>'+v.n+'</b><br>'+TL(v.c)+'</div>':'')+'</div>';}
-  h+='</div><div class="card" style="text-align:center"><b>'+AY[m]+'</b> · '+sips.length+' sipariş · '+TL(mc)+'</div>';c.innerHTML=h;
+  h+='</div><div class="card" style="text-align:center">'+(sips.length===0?'<span style="color:var(--dm)">'+AY[m]+' '+y+' · bu ay sipariş yok</span>':'<b>'+AY[m]+'</b> · '+sips.length+' sipariş · '+TL(mc))+'</div>';c.innerHTML=h;
 }
 function chMo(d){curMo=new Date(curMo.getFullYear(),curMo.getMonth()+d,1);render();}
 
