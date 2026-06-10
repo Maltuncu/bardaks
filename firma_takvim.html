@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Bardaks B2B — Firma Yönetim</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#171a21">
+<meta name="theme-color" content="#F4F6F9">
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -13,14 +13,14 @@
 <meta name="apple-mobile-web-app-title" content="Bardaks">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{--bg:#171a21;--s:#1e222b;--s2:#262b35;--bd:#313846;--tx:#e6e8ee;--dm:#9aa2b1;--ac:#d8a85b;--gn:#56b98a;--rd:#e36a6a;--r:12px;--sh:0 1px 3px rgba(0,0,0,.25)}
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+:root{--bg:#F4F6F9;--s:#FFFFFF;--s2:#F8FAFC;--bd:#E2E8F0;--tx:#1A2B40;--dm:#64748B;--ac:#1E5BA8;--gn:#1F8B5F;--rd:#C0392B;--r:10px;--sh:0 1px 2px rgba(16,32,56,.06)}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--tx);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
 .top{position:sticky;top:0;z-index:30;background:var(--s);border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;padding:12px 16px;flex-wrap:wrap;gap:8px}
 .logo{font-size:17px;font-weight:800;color:var(--ac)} .logo span{color:var(--tx)}
 .w{max-width:750px;margin:0 auto;padding:12px}
 select,input{background:var(--s2);border:1px solid var(--bd);border-radius:9px;padding:10px 12px;color:var(--tx);font-size:15px;font-family:inherit;width:100%}
 select:focus,input:focus{outline:none;border-color:var(--ac)}
-.b{background:var(--ac);color:#1a1208;border:none;font-weight:700;padding:10px 16px;border-radius:9px;cursor:pointer;font-size:14px;display:inline-block}
+.b{background:var(--ac);color:#fff;border:none;font-weight:700;padding:10px 16px;border-radius:9px;cursor:pointer;font-size:14px;display:inline-block}
 .b.s{background:var(--s2);color:var(--tx);border:1px solid var(--bd)} .b.d{background:var(--rd);color:#fff} .b.g{background:var(--gn);color:#fff}
 .b.full{width:100%;text-align:center}
 .card{background:var(--s);border:1px solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:10px;box-shadow:var(--sh)}
@@ -30,8 +30,8 @@ select:focus,input:focus{outline:none;border-color:var(--ac)}
 .crumb a:hover{color:var(--tx);background:var(--s2)}
 .crumb .sep{opacity:.5} .crumb .cur{color:var(--tx);font-weight:600}
 .hero{background:linear-gradient(180deg,var(--s2),var(--s));border:1px solid var(--bd);border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 4px 16px rgba(0,0,0,.28);position:relative;overflow:hidden}
-.hero.s-rd{border-color:#5a2e2e;background:linear-gradient(180deg,#2c2024,var(--s))}
-.hero.s-gn{border-color:#2e5343;background:linear-gradient(180deg,#1e2a26,var(--s))}
+.hero.s-rd{border-color:#F0C8C2;background:linear-gradient(180deg,#FBE9E7,var(--s))}
+.hero.s-gn{border-color:#BFE3D0;background:linear-gradient(180deg,#E6F4EE,var(--s))}
 .hero-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .hero-lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--dm);font-weight:700}
 .hero-score{font-size:13px;color:var(--dm)} .hero-score b{font-size:18px}
@@ -44,17 +44,17 @@ select:focus,input:focus{outline:none;border-color:var(--ac)}
 .hero-meta{margin-top:14px;border-top:1px solid var(--bd);padding-top:10px}
 .l2{border-left:3px solid var(--ac)} .l2 b{color:var(--ac)}
 .lvl4{opacity:.92}
-.warn{background:#3a2f1c;border:1px solid var(--ac);border-radius:var(--r);padding:12px;margin-bottom:10px;font-size:13px}
+.warn{background:#FBF1DD;border:1px solid var(--ac);border-radius:var(--r);padding:12px;margin-bottom:10px;font-size:13px}
 .warn b{color:var(--ac)}
 label{display:block;font-size:12px;color:var(--dm);margin:8px 0 4px}
 .tabs{display:flex;gap:0;background:var(--s);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;margin-bottom:12px}
 .tab{flex:1;padding:11px 6px;text-align:center;cursor:pointer;font-weight:700;font-size:12px;color:var(--dm);border-right:1px solid var(--bd)}
-.tab:last-child{border-right:none} .tab.on{background:var(--ac);color:#1a1208}
+.tab:last-child{border-right:none} .tab.on{background:var(--ac);color:#fff}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:10px 0}
 .cal-h{text-align:center;font-size:11px;color:var(--dm);font-weight:700;padding:5px 0}
 .cal-d{background:var(--s);border:1px solid var(--bd);border-radius:8px;padding:5px;min-height:52px;cursor:pointer;transition:.15s}
 .cal-d:hover{border-color:var(--ac)} .cal-d.empty{background:transparent;border:none;cursor:default}
-.cal-d.today{border-color:var(--ac);border-width:2px} .cal-d.has{background:#2a2f1c;border-color:#4a6a2a}
+.cal-d.today{border-color:var(--ac);border-width:2px} .cal-d.has{background:#E8F0FB;border-color:#1E5BA8}
 .cal-d .dn{font-size:12px;font-weight:700} .cal-d .di{font-size:9px;color:var(--dm);margin-top:2px;line-height:1.2}
 #mo{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:14px}
 #mo.open{display:flex}
@@ -197,7 +197,7 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){retur
 function trd(d){if(!d)return '';var x=new Date(d);return isNaN(x)?String(d):x.toLocaleDateString('tr-TR');}
 function tdy(){return new Date().toISOString().slice(0,10);}
 function fval(id){var e=document.getElementById(id);return e?String(e.value).trim():'';}
-var BTN='background:var(--ac);color:#1a1208;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12px';
+var BTN='background:var(--ac);color:#fff;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12px';
 var BTS='background:var(--s2);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer;font-size:12px';
 var BTD='background:var(--rd);color:#fff;border:none;border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer;font-size:12px';
 var CEKD={beklemede:'Beklemede',tahsil_edildi:'Tahsil Edildi',karsiliksiz:'Karşılıksız',iptal:'İptal'};
@@ -454,8 +454,8 @@ async function renderOzet(){
   // 4) AÇIK BAKİYE + TEKLİF + FİRMA NOTU
   var cipler='';
   if(gunOnce!=null) cipler+='<span style="background:var(--s2);border:1px solid var(--bd);border-radius:20px;padding:3px 10px;font-size:11px">son sipariş '+gunOnce+' gün önce</span> ';
-  if(kalan>0) cipler+='<span style="background:#3a1c1c;color:var(--rd);border-radius:20px;padding:3px 10px;font-size:11px">tahsilat bekliyor</span> ';
-  if(bekCek>0) cipler+='<span style="background:#3a2f1c;color:var(--ac);border-radius:20px;padding:3px 10px;font-size:11px">'+bekCek+' bekleyen çek</span>';
+  if(kalan>0) cipler+='<span style="background:#FBE9E7;color:var(--rd);border-radius:20px;padding:3px 10px;font-size:11px">tahsilat bekliyor</span> ';
+  if(bekCek>0) cipler+='<span style="background:#E8F0FB;color:var(--ac);border-radius:20px;padding:3px 10px;font-size:11px">'+bekCek+' bekleyen çek</span>';
   h+='<div class="card"><div style="font-size:12px;color:var(--dm)">Açık Bakiye</div>'
     +'<div style="font-size:30px;font-weight:800;color:var('+(kalan>0?'--rd':'--gn')+')">'+TL(kalan)+'</div>'
     +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'+(cipler||'<span style="color:var(--dm);font-size:12px">temiz</span>')+'</div></div>';
