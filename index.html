@@ -1679,25 +1679,25 @@ async function openFiyatListesi(){
   sirali.forEach(function(kat){
     h += '<div style="font-size:12px;font-weight:700;color:var(--accent);margin:10px 0 4px;text-transform:uppercase">'+(KAT_ETIKET[kat]||kat)+'</div>';
     gruplar[kat].forEach(function(u){
-      var kdvDahil = u.varsayilan_fiyat ? Math.round(u.varsayilan_fiyat * (1 + (u.kdv_orani||1)/100)) : '';
-      h += '<div class="fl-row"><label class="fl-check"><input type="checkbox" checked data-uid="'+u.id+'" class="flCb"><span>'+escapeHtml(u.ad)+(u.gramaj?' <small style="color:var(--text-dim)">('+escapeHtml(u.gramaj)+')</small>':'')+'</span></label><input type="number" class="fl-fiyat" id="flf-'+u.id+'" value="'+kdvDahil+'" placeholder="₺" style="width:75px;text-align:right"></div>';
+      var fiyatHaric = u.varsayilan_fiyat || '';
+      h += '<div class="fl-row"><label class="fl-check"><input type="checkbox" checked data-uid="'+u.id+'" class="flCb"><span>'+escapeHtml(u.ad)+(u.gramaj?' <small style="color:var(--text-dim)">('+escapeHtml(u.gramaj)+')</small>':'')+'</span></label><input type="number" class="fl-fiyat" id="flf-'+u.id+'" value="'+fiyatHaric+'" placeholder="₺" style="width:75px;text-align:right"></div>';
     });
   });
   h += '</div>';
-  h += '<div style="font-size:11px;color:var(--text-dim);margin-top:8px">Fiyatlar KDV DAHiL olarak girilir.</div>';
+  h += '<div style="font-size:11px;color:var(--text-dim);margin-top:8px">Birim fiyatlar KDV hariçtir. Genel toplam/fatura KDV dahil hesaplanır. KDV oranı ürün bazında ayrıca hesaplanır.</div>';
   h += '<button class="btn btn-block mt" onclick="fiyatListesiPDF()">📄 PDF Oluştur</button>';
   openModal(h);
 }
 async function flFirmaDegis(){
   var fid = document.getElementById('flFirma').value;
-  if(!fid){ flUrunler.forEach(function(u){ var inp=document.getElementById('flf-'+u.id); if(inp) inp.value = u.varsayilan_fiyat ? Math.round(u.varsayilan_fiyat*(1+(u.kdv_orani||1)/100)) : ''; }); return; }
+  if(!fid){ flUrunler.forEach(function(u){ var inp=document.getElementById('flf-'+u.id); if(inp) inp.value = u.varsayilan_fiyat || ''; }); return; }
   var r = await sb.from('firma_urun_fiyat').select('urun_id,birim_fiyat_kdv_haric').eq('firma_id',fid);
   var ff = {}; (r.data||[]).forEach(function(x){ ff[x.urun_id]=x.birim_fiyat_kdv_haric; });
   flUrunler.forEach(function(u){
     var inp = document.getElementById('flf-'+u.id);
     if(!inp) return;
     var bfh = ff[u.id] || u.varsayilan_fiyat;
-    inp.value = bfh ? Math.round(bfh * (1 + (u.kdv_orani||1)/100)) : '';
+    inp.value = bfh || '';
   });
   document.querySelectorAll('.flCb').forEach(function(cb){
     var uid=cb.dataset.uid;
@@ -1735,7 +1735,7 @@ async function flGorselUret(secili, firmaAd){
   var box = document.createElement('div');
   box.id = 'flCanvasKaynak';
   box.style.cssText = 'position:fixed;left:-9999px;top:0;width:780px;background:#faf3df;padding:34px;font-family:system-ui,Arial,sans-serif';
-  box.innerHTML = '<div style="text-align:center;padding-bottom:18px;border-bottom:3px solid #8b5e3c;margin-bottom:22px"><div style="font-size:40px;font-weight:900;color:#8b5e3c;letter-spacing:-1px;line-height:1">bardak\'s<span style="font-size:15px;vertical-align:super">\u00AE</span></div><div style="font-size:15px;color:#8b5e3c;font-style:italic;margin-top:2px">iz b\u0131rakan tatlar</div><div style="font-size:16px;font-weight:700;color:#3d2c1e;margin-top:12px;letter-spacing:.5px">G\u00DCNL\u00DCK TATLI F\u0130YAT L\u0130STES\u0130</div><div style="font-size:12px;color:#9a8b7a;margin-top:3px">'+(firmaAd?firmaAd.toUpperCase()+' \u00B7 ':'')+bugun+'</div></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">'+cards+'</div><div style="text-align:center;margin-top:24px;padding-top:14px;border-top:2px solid #e8ddd0;font-size:11px;color:#9a8b7a">Fiyatlar KDV dahildir \u00B7 BARDAKS GIDA T\u0130CARET LTD. \u015ET\u0130. \u00B7 bardakstr@gmail.com</div>';
+  box.innerHTML = '<div style="text-align:center;padding-bottom:18px;border-bottom:3px solid #8b5e3c;margin-bottom:22px"><div style="font-size:40px;font-weight:900;color:#8b5e3c;letter-spacing:-1px;line-height:1">bardak\'s<span style="font-size:15px;vertical-align:super">\u00AE</span></div><div style="font-size:15px;color:#8b5e3c;font-style:italic;margin-top:2px">iz b\u0131rakan tatlar</div><div style="font-size:16px;font-weight:700;color:#3d2c1e;margin-top:12px;letter-spacing:.5px">G\u00DCNL\u00DCK TATLI F\u0130YAT L\u0130STES\u0130</div><div style="font-size:12px;color:#9a8b7a;margin-top:3px">'+(firmaAd?firmaAd.toUpperCase()+' \u00B7 ':'')+bugun+'</div></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">'+cards+'</div><div style="text-align:center;margin-top:24px;padding-top:14px;border-top:2px solid #e8ddd0;font-size:11px;color:#9a8b7a">Birim fiyatlar KDV hari\u00E7tir \u00B7 Genel toplam/fatura KDV dahil hesaplan\u0131r \u00B7 BARDAKS GIDA T\u0130CARET LTD. \u015ET\u0130. \u00B7 bardakstr@gmail.com</div>';
   document.body.appendChild(box);
 
   openModal('<div class="modal-head"><h3>\uD83D\uDCC4 Fiyat Listesi</h3><button class="modal-close" onclick="closeModal();flTemizle()">\u00D7</button></div><div id="flOnizleme" style="text-align:center;padding:30px"><div class="loading">G\u00F6rsel haz\u0131rlan\u0131yor...</div></div>');
