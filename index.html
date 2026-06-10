@@ -736,6 +736,7 @@ async function kaydetSiparis(){
   const teslim = (document.getElementById('ysTeslim')||{}).value || tarih;
   const dolu = ysSatirlar.filter(function(s){return s.adet>0;});
   if(!dolu.length){ alert('En az bir ürüne adet gir'); return; }
+  if(dolu.some(function(s){return !s.urun_id;})){ alert('Katalog dışı ürün var — kaydedilemez. Tüm ürünler master katalogdan seçilmelidir.'); return; }
   const r = await sb.from('siparisler').insert({ firma_id:fid, tarih:tarih, teslim_tarihi:teslim, durum:'bekleyen', created_by:CURRENT.ad_soyad, last_updated_by:CURRENT.ad_soyad }).select().single();
   if(r.error){ alert('Hata: '+r.error.message); return; }
   const kalemler = dolu.map(function(s){return { siparis_id:r.data.id, urun_id:s.urun_id, urun_ad:s.ad, adet:s.adet, birim_fiyat_kdv_haric:s.fiyat, kdv_orani:s.kdv };});
