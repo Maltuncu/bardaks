@@ -467,7 +467,8 @@ async function renderHome(){
       sb.from('tahsilatlar').select('tutar').gte('tarih',ayBas).eq('is_deleted',false),
       sb.from('v_firma_gecmis').select('*'),
       sb.from('v_urun_yillik').select('urun_ad,toplam_adet,toplam_dahil').eq('yil',Y).order('toplam_dahil',{ascending:false}).limit(10),
-      sb.from('tahsilatlar').select('id',{count:'exact',head:true}).eq('odeme_tipi','cek').eq('cek_durumu','beklemede').eq('is_deleted',false)
+      sb.from('tahsilatlar').select('id',{count:'exact',head:true}).eq('odeme_tipi','cek').eq('cek_durumu','beklemede').eq('is_deleted',false),
+      sb.from('v_firma_pulse').select('*')
     ]);
   } catch(e){
     el.innerHTML = '<div class="hm-empty"><span class="ico">⚠️</span>Komuta Merkezi yüklenemedi<div style="font-size:12px;margin-top:6px">'+escapeHtml(String((e&&e.message)||e))+'</div></div>';
@@ -475,6 +476,7 @@ async function renderHome(){
   }
   const cari=r[0].data||[], gecmis=r[1].data||[], ayOzet=r[2].data||[], ayTahs=r[3].data||[], fg=r[4].data||[], topUrun=r[5].data||[];
   const bekCek = r[6].count||0;
+  const pulse = (r[7]&&r[7].data)||[];
 
   // ---- BÖLÜM 1: ŞİRKET DURUMU (4 KPI)
   const acikBakiye = cari.reduce(function(s,x){return s+num(x.kalan_bakiye);},0) + gecmis.reduce(function(s,x){return s+num(x.kalan_bakiye);},0);
@@ -491,30 +493,26 @@ async function renderHome(){
     + '</div>';
   if(ayS===0 && ayT===0 && ayK===0){ h += '<div class="hm-empty" style="margin:-4px 0 14px"><span class="ico">📊</span>Henüz bu ay satış verisi yok</div>'; }
 
-  // ---- BÖLÜM 2: ACİL AKSİYONLAR (v_firma_gecmis, açık bakiye DESC, ilk 5)
-  const acil = fg.filter(function(x){return num(x.acik_bakiye)>1;}).sort(function(a,b){return num(b.acik_bakiye)-num(a.acik_bakiye);}).slice(0,5);
-  const s2 = acil.length ? acil.map(function(x){
-    const gun=x.son_siparis_gun_once;
-    const kirmizi=(gun!=null && num(gun)>=30 && num(x.acik_bakiye)>0);
-    return row(x.firma_ad, (gun==null?'Hiç sipariş yok':('Son sipariş '+gun+' gün önce')), TL(x.acik_bakiye), kirmizi?'--red':'--text', kirmizi?'<span class="tag tag-red">30+ gün</span>':'');
-  }).join('') : emptyBox('💰','Tahsilat takibi gerektiren firma yok');
-  h += card('🔔 Acil Aksiyonlar — Bugün Kimi Aramalı?', s2);
+  // ---- BÖLÜM 2: NE YAPMALI — PULSE TOP-5 (v_firma_pulse; öncelik = şiddet × para etkisi) [PULSE-2]
+  const RISK_ETIKET = {kritik_cek:'ÇEK', kayip:'KAYIP RİSKİ', odeme:'TAHSİLAT', uyuyan:'UYUYAN', beklenen_siparis:'SİPARİŞ ZAMANI'};
+  const pAks = pulse.filter(function(x){return x.aksiyon;}).sort(function(a,b){return num(b.oncelik_skoru)-num(a.oncelik_skoru);}).slice(0,5);
+  const s2 = pAks.length ? pAks.map(function(x){
+    const tagCls = num(x.siddet)>=4?'tag-red':(num(x.siddet)>=2?'tag-yellow':'tag-blue');
+    const badge = '<span class="tag '+tagCls+'">'+(RISK_ETIKET[x.risk_sinif]||'')+'</span>';
+    return row(x.firma_ad, x.aksiyon, (num(x.acik_bakiye)>0?TL(x.acik_bakiye):''), num(x.siddet)>=4?'--red':'--text', badge);
+  }).join('') : (pulse.length ? emptyBox('✅','Bugün acil aksiyon yok') : emptyBox('💓','Pulse verisi yüklenemedi'));
+  h += card('🎯 Ne Yapmalı — Pulse Top 5', s2);
 
-  // ---- BÖLÜM 3: UYUYAN FİRMALAR (son_siparis_gun_once DESC, ilk 10)
-  const uyList = fg.slice().sort(function(a,b){
-    const ga=a.son_siparis_gun_once==null?Infinity:num(a.son_siparis_gun_once);
-    const gb=b.son_siparis_gun_once==null?Infinity:num(b.son_siparis_gun_once);
-    return gb-ga;
-  }).filter(function(x){ return x.son_siparis_gun_once==null || num(x.son_siparis_gun_once)>=30; }).slice(0,10);
-  const s3 = uyList.length ? uyList.map(function(x){
-    const gun=x.son_siparis_gun_once; let badge='', col='--text-dim';
-    if(gun==null){ badge='<span class="tag tag-red">hiç</span>'; }
-    else if(num(gun)>=90){ badge='<span class="tag tag-red">90+ gün</span>'; }
-    else if(num(gun)>=60){ badge='<span class="tag" style="background:rgba(183,121,31,.15);color:#B7791F">60+ gün</span>'; }
-    else if(num(gun)>=30){ badge='<span class="tag tag-yellow">30+ gün</span>'; }
-    return row(x.firma_ad, (gun==null?'Hiç sipariş vermemiş':(gun+' gündür sipariş yok')), (num(x.acik_bakiye)>0?TL(x.acik_bakiye):''), num(x.acik_bakiye)>0?'--red':'--text-dim', badge);
-  }).join('') : emptyBox('😴','Uyuyan firma bulunmuyor');
-  h += card('😴 Uyuyan Firmalar', s3);
+  // ---- BÖLÜM 3: MÜŞTERİ NABZI (v_firma_pulse; sağlık skoru ASC) [PULSE-2]
+  const PULSE_RENK = {kirmizi:'--red', sari:'--yellow', yesil:'--green'};
+  const ZAYIF_AD = {recency:'sipariş ritmi', payment:'ödeme', frequency:'sıklık', monetary:'ciro'};
+  const pSkor = pulse.slice().sort(function(a,b){return num(a.health_skor)-num(b.health_skor);}).slice(0,10);
+  const s3 = pSkor.length ? pSkor.map(function(x){
+    const dot = '<span style="color:var('+(PULSE_RENK[x.health_renk]||'--text-dim')+');font-size:13px">●</span>';
+    const sub = 'Sağlık '+x.health_skor+'/100 · zayıf: '+(ZAYIF_AD[x.en_zayif_bilesen]||x.en_zayif_bilesen)+(x.recency_ratio!=null?(' · ritim '+x.recency_ratio+'×'):'');
+    return row(x.firma_ad, sub, (num(x.acik_bakiye)>0?TL(x.acik_bakiye):''), x.health_renk==='kirmizi'?'--red':'--text-dim', dot);
+  }).join('') : emptyBox('💤','Pulse verisi bulunmuyor');
+  h += card('💓 Müşteri Nabzı <span style="color:var(--text-dim);font-size:11px;font-weight:400">(ciro temelli — kâr bileşeni maliyet girişi sonrası)</span>', s3);
 
   // ---- BÖLÜM 4: EN DEĞERLİ FİRMALAR (toplam_satis_dahil DESC, ilk 5)
   const deg = fg.filter(function(x){return num(x.toplam_satis_dahil)>0;}).sort(function(a,b){return num(b.toplam_satis_dahil)-num(a.toplam_satis_dahil);}).slice(0,5);

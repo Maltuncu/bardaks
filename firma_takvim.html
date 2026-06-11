@@ -376,7 +376,8 @@ async function renderOzet(){
     sb.from('siparisler').select('id',{count:'exact',head:true}).eq('firma_id',fid).eq('is_deleted',false).in('durum',['bekleyen','uretimde','hazir','sevk_edildi']),
     sb.from('tahsilatlar').select('tarih,tutar,odeme_tipi').eq('firma_id',fid).eq('is_deleted',false).order('tarih',{ascending:false}).limit(1),
     sb.from('siparisler').select('id,tarih,toplam_kdv_dahil').eq('firma_id',fid).eq('is_deleted',false).neq('durum','iptal').gte('tarih',bas12).order('tarih',{ascending:false}),
-    sb.from('firmalar').select('resmi_unvan,vergi_no,vergi_dairesi').eq('id',fid).maybeSingle()
+    sb.from('firmalar').select('resmi_unvan,vergi_no,vergi_dairesi').eq('id',fid).maybeSingle(),
+    sb.from('v_firma_pulse').select('*').eq('firma_id',fid).maybeSingle()
   ]);
   if(res[0].error){
     c.innerHTML='<div class="card" style="text-align:center;color:var(--dm);padding:24px">⚠ Veri yüklenemedi. <button class="b s" onclick="render()" style="margin-left:8px">Tekrar dene</button></div>';
@@ -417,11 +418,32 @@ async function renderOzet(){
   var sureklilikOk=pulse.yeterli?!pulse.normalDisi:(gunOnce!=null&&gunOnce<=14);
   var health=bkHealth({odemeOrani:odemeOrani,buyumeRatio:buyumeRatio,kalan:kalan,ciro:ciro,maliyetli:maliyetli,maliyetTop:satisUr.length,vergiVar:vergiVar,fiyatEksik:fiyatEksik,sureklilikOk:sureklilikOk});
   var tasks=bkTasks({pulse:pulse,firmaAd:firmaAd,maliyetEksik:maliyetEksik,vergiVar:vergiVar,fiyatEksik:fiyatEksik,kalan:kalan});
+  // [PULSE-3] Tek motor: v_firma_pulse varsa hero kararı ve skor motordan gelir; bkPulse yalnız fallback.
+  var pv=(res[6]&&res[6].data)||null;
+  if(pv&&pv.aksiyon){ tasks=tasks.filter(function(t){return t.ico!=='☎';}); tasks.unshift({ico:'☎',o:0,clr:(Number(pv.siddet)>=4?'--rd':'--ac'),text:esc(pv.aksiyon)+' — '+esc(firmaAd)}); }
 
   var h='';
   // 1) MÜŞTERİ NABZI — HERO (durum + sebep + tek aksiyon). Mantık değişmez; pulse'tan türetilir.
   var heroCls,badgeCls,badgeTxt,reason,actHtml;
-  if(!pulse.yeterli){
+  if(pv){
+    var ritimTxt=(pv.recency_ratio!=null)
+      ? 'son sessizlik <b>'+pv.sessiz_gun+' gün</b> (ritim ~'+Number(pv.ort_aralik).toFixed(1)+' gün → '+pv.recency_ratio+'×)'
+      : 'son sessizlik '+pv.sessiz_gun+' gün';
+    var beklenenTxt=pv.beklenen_siparis_tarihi?(' · beklenen sipariş '+trd(pv.beklenen_siparis_tarihi)):'';
+    if(pv.risk_sinif==='kayip'||pv.risk_sinif==='kritik_cek'){
+      heroCls=' s-rd';badgeCls='rd';badgeTxt=(pv.risk_sinif==='kritik_cek'?'🔴 ACİL — ÇEK':'🔴 ARA');
+      reason=esc(pv.aksiyon||'')+' · '+ritimTxt;
+      actHtml='<button class="hero-act call" onclick="openRel()">☎ '+esc(firmaAd)+'’i ara · görüşmeyi kaydet</button>';
+    } else if(pv.risk_sinif){
+      heroCls='';badgeCls='nt';badgeTxt=(pv.risk_sinif==='odeme'?'🟡 TAHSİLAT':'🟡 RİTİM GECİKTİ');
+      reason=esc(pv.aksiyon||'')+' · '+ritimTxt+beklenenTxt;
+      actHtml='<button class="hero-act call" onclick="openRel()">☎ '+esc(firmaAd)+'’i ara · görüşmeyi kaydet</button>';
+    } else {
+      heroCls=' s-gn';badgeCls='gn';badgeTxt='🟢 NORMAL';
+      reason='Sipariş ritmi normal — '+ritimTxt+beklenenTxt+'. Şimdilik bekle.';
+      actHtml='<div class="hero-act calm">✓ Aksiyon gerekmiyor — ritim normal</div>';
+    }
+  } else if(!pulse.yeterli){
     heroCls='';badgeCls='nt';badgeTxt='⚪ VERİ YOK';
     reason='Nabız için yeterli sipariş geçmişi yok (en az 3 sipariş). Veri girilince otomatik hesaplanır.';
     actHtml='';
@@ -436,7 +458,8 @@ async function renderOzet(){
   }
   h+='<div class="hero'+heroCls+'">'
     +'<div class="hero-top"><span class="hero-lbl">📡 Müşteri Nabzı</span>'
-    +(pulse.yeterli?'<span class="hero-score">Sağlık <b style="color:var('+(health.score>=85?'--gn':health.score>=70?'--ac':'--rd')+')">'+health.score+'</b>/100 · güven '+pulse.guven+'</span>':'')+'</div>'
+    +(pv?'<span class="hero-score">Sağlık <b style="color:var('+(pv.health_renk==='yesil'?'--gn':pv.health_renk==='sari'?'--ac':'--rd')+')">'+pv.health_skor+'</b>/100 · Pulse</span>'
+       :(pulse.yeterli?'<span class="hero-score">Sağlık <b style="color:var('+(health.score>=85?'--gn':health.score>=70?'--ac':'--rd')+')">'+health.score+'</b>/100 · güven '+pulse.guven+'</span>':''))+'</div>'
     +'<div class="badge '+badgeCls+'">'+badgeTxt+'</div>'
     +'<div class="hero-reason">'+reason+'</div>'
     +actHtml
@@ -446,8 +469,8 @@ async function renderOzet(){
   if(tasks.length){h+='<div style="margin-top:6px">'+tasks.map(function(t){return '<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--bd)"><span style="color:var('+t.clr+')">'+t.ico+'</span><span style="font-size:13px;flex:1">'+t.text+'</span></div>';}).join('')+'</div>';}
   else h+='<div style="color:var(--gn);font-size:13px;margin-top:6px">✓ Bekleyen görev yok.</div>';
   h+='</div>';
-  // 3) SAĞLIK SKORU AÇIKLAMASI
-  h+='<div class="card"><b>💚 Sağlık Skoru · '+health.score+'/100</b>';
+  // 3) SAĞLIK SKORU AÇIKLAMASI ([PULSE-3] skor motordan; strong/improve listesi firma gelişim görevleri)
+  h+='<div class="card"><b>💚 Sağlık Skoru · '+(pv?pv.health_skor:health.score)+'/100</b>'+(pv?' <span style="font-size:11px;color:var(--dm)">ciro temelli (Pulse) · zayıf bileşen: '+esc(pv.en_zayif_bilesen||'')+'</span>':'');
   if(health.strong.length)h+='<div style="margin-top:6px">'+health.strong.map(function(s){return '<div style="font-size:13px;color:var(--gn)">✅ '+esc(s)+'</div>';}).join('')+'</div>';
   if(health.improve.length)h+='<div style="margin-top:6px">'+health.improve.map(function(s){return '<div style="font-size:13px;color:var(--dm)">⬜ '+esc(s.t)+' <span style="color:var(--ac)">'+s.p+'</span></div>';}).join('')+'</div>';
   h+='</div>';
