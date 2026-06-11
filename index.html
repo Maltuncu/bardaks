@@ -465,18 +465,20 @@ async function renderHome(){
       sb.from('gecmis_aylik_ozet').select('firma_id,kalan_bakiye'),
       sb.from('v_aylik_ozet').select('toplam_dahil,net_kar').eq('yil',Y).eq('ay',M),
       sb.from('tahsilatlar').select('tutar').gte('tarih',ayBas).eq('is_deleted',false),
-      sb.from('v_firma_gecmis').select('*'),
-      sb.from('v_urun_yillik').select('urun_ad,toplam_adet,toplam_dahil').eq('yil',Y).order('toplam_dahil',{ascending:false}).limit(10),
       sb.from('tahsilatlar').select('id',{count:'exact',head:true}).eq('odeme_tipi','cek').eq('cek_durumu','beklemede').eq('is_deleted',false),
-      sb.from('v_firma_pulse').select('*')
+      sb.from('v_firma_pulse').select('*'),
+      sb.from('hesap_bakiye').select('bakiye'),
+      sb.from('siparisler').select('id,tarih,teslim_tarihi,durum').in('durum',['bekleyen','uretimde','hazir']).eq('is_deleted',false)
     ]);
   } catch(e){
     el.innerHTML = '<div class="hm-empty"><span class="ico">⚠️</span>Komuta Merkezi yüklenemedi<div style="font-size:12px;margin-top:6px">'+escapeHtml(String((e&&e.message)||e))+'</div></div>';
     return;
   }
-  const cari=r[0].data||[], gecmis=r[1].data||[], ayOzet=r[2].data||[], ayTahs=r[3].data||[], fg=r[4].data||[], topUrun=r[5].data||[];
-  const bekCek = r[6].count||0;
-  const pulse = (r[7]&&r[7].data)||[];
+  const cari=r[0].data||[], gecmis=r[1].data||[], ayOzet=r[2].data||[], ayTahs=r[3].data||[];
+  const bekCek = r[4].count||0;
+  const pulse = (r[5]&&r[5].data)||[];
+  const hesaplar = (r[6]&&r[6].data)||[];
+  const aktifSips = (r[7]&&r[7].data)||[];
 
   // ---- BÖLÜM 1: ŞİRKET DURUMU (4 KPI)
   const acikBakiye = cari.reduce(function(s,x){return s+num(x.kalan_bakiye);},0) + gecmis.reduce(function(s,x){return s+num(x.kalan_bakiye);},0);
@@ -484,64 +486,38 @@ async function renderHome(){
   const ayK = ayOzet.reduce(function(s,x){return s+num(x.net_kar);},0);
   const ayT = ayTahs.reduce(function(s,x){return s+num(x.tutar);},0);
 
+  const nakit = hesaplar.reduce(function(s,x){return s+num(x.bakiye);},0);
   let h = '<h1 class="page-title">Komuta Merkezi</h1><div class="page-desc">'+escapeHtml((CURRENT.ad_soyad||'').split(' ')[0])+' · '+ayAd+' '+Y+'</div>';
-  h += '<div class="stats">'
-    + kpi('Toplam Açık Bakiye', TL(acikBakiye), acikBakiye>0?'--red':'--text')
-    + kpi(ayAd+' Satış', TL(ayS), '--accent')
-    + kpi(ayAd+' Tahsilat', TL(ayT), ayT>0?'--green':'--text')
-    + kpi(ayAd+' Kâr', TL(ayK), ayK>0?'--green':(ayK<0?'--red':'--text'))
-    + '</div>';
-  if(ayS===0 && ayT===0 && ayK===0){ h += '<div class="hm-empty" style="margin:-4px 0 14px"><span class="ico">📊</span>Henüz bu ay satış verisi yok</div>'; }
+  // ---- BÖLÜM 1: FİNANS ŞERİDİ [DASH-V3] — değer hesapları değişmedi, yalnız sunum inceldi
+  h += '<div class="card" style="padding:10px 14px;margin-bottom:14px"><div style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:baseline">'
+    + '<span style="font-size:13px;color:var(--text-dim)">Açık Bakiye <b style="font-size:17px;color:var('+(acikBakiye>0?'--red':'--text')+')">'+TL(acikBakiye)+'</b></span>'
+    + '<span style="font-size:12px;color:var(--text-dim)">Nakit <b style="font-size:14px;color:var(--text)">'+TL(nakit)+'</b></span>'
+    + '<span style="font-size:12px;color:var(--text-dim)">'+ayAd+' Satış <b style="color:var(--text)">'+TL(ayS)+'</b></span>'
+    + '<span style="font-size:12px;color:var(--text-dim)">Tahsilat <b style="color:var(--text)">'+TL(ayT)+'</b></span>'
+    + '<span style="font-size:12px;color:var(--text-dim)">Kâr <b>'+TL(ayK)+'</b> <span class="tag tag-yellow" style="font-size:10px">tahmini</span></span>'
+    + '</div></div>';
 
   // ---- BÖLÜM 2: NE YAPMALI — PULSE TOP-5 (v_firma_pulse; öncelik = şiddet × para etkisi) [PULSE-2]
   const RISK_ETIKET = {kritik_cek:'ÇEK', kayip:'KAYIP RİSKİ', odeme:'TAHSİLAT', uyuyan:'UYUYAN', beklenen_siparis:'SİPARİŞ ZAMANI'};
-  const pAks = pulse.filter(function(x){return x.aksiyon;}).sort(function(a,b){return num(b.oncelik_skoru)-num(a.oncelik_skoru);}).slice(0,5);
+  const pAks = pulse.filter(function(x){return x.aksiyon && num(x.siddet)>=2;}).sort(function(a,b){return num(b.oncelik_skoru)-num(a.oncelik_skoru);}).slice(0,5);
   const s2 = pAks.length ? pAks.map(function(x){
-    const tagCls = num(x.siddet)>=4?'tag-red':(num(x.siddet)>=2?'tag-yellow':'tag-blue');
+    const tagCls = num(x.siddet)>=4?'tag-red':'tag-yellow';
     const badge = '<span class="tag '+tagCls+'">'+(RISK_ETIKET[x.risk_sinif]||'')+'</span>';
     return row(x.firma_ad, x.aksiyon, (num(x.acik_bakiye)>0?TL(x.acik_bakiye):''), num(x.siddet)>=4?'--red':'--text', badge);
-  }).join('') : (pulse.length ? emptyBox('✅','Bugün acil aksiyon yok') : emptyBox('💓','Pulse verisi yüklenemedi'));
-  h += card('🎯 Ne Yapmalı — Pulse Top 5', s2);
+  }).join('') : (pulse.length ? emptyBox('🟢','Bugün aksiyon eşiğini geçen firma yok. (Eşik: şiddet ≥ 2 — "her şey yolunda" demek değildir)') : emptyBox('💓','Pulse verisi yüklenemedi'));
+  h += '<div class="card" style="border:2px solid var(--accent)"><div class="card-title">🎯 Bugün Ne Yapmalı — Pulse</div>'+s2+'</div>';
 
-  // ---- BÖLÜM 3: MÜŞTERİ NABZI (v_firma_pulse; sağlık skoru ASC) [PULSE-2]
-  const PULSE_RENK = {kirmizi:'--red', sari:'--yellow', yesil:'--green'};
-  const ZAYIF_AD = {recency:'sipariş ritmi', payment:'ödeme', frequency:'sıklık', monetary:'ciro'};
-  const pSkor = pulse.slice().sort(function(a,b){return num(a.health_skor)-num(b.health_skor);}).slice(0,10);
-  const s3 = pSkor.length ? pSkor.map(function(x){
-    const dot = '<span style="color:var('+(PULSE_RENK[x.health_renk]||'--text-dim')+');font-size:13px">●</span>';
-    const sub = 'Sağlık '+x.health_skor+'/100 · zayıf: '+(ZAYIF_AD[x.en_zayif_bilesen]||x.en_zayif_bilesen)+(x.recency_ratio!=null?(' · ritim '+x.recency_ratio+'×'):'');
-    return row(x.firma_ad, sub, (num(x.acik_bakiye)>0?TL(x.acik_bakiye):''), x.health_renk==='kirmizi'?'--red':'--text-dim', dot);
-  }).join('') : emptyBox('💤','Pulse verisi bulunmuyor');
-  h += card('💓 Müşteri Nabzı <span style="color:var(--text-dim);font-size:11px;font-weight:400">(ciro temelli — kâr bileşeni maliyet girişi sonrası)</span>', s3);
+  // ---- BÖLÜM 3: OPERASYON SATIRI [DASH-V3] — renderUretim ile AYNI grup tanımları (teslim_tarihi||tarih)
+  const bugunStr = today();
+  let opTeslim=0, opGeciken=0, opUretimde=0;
+  aktifSips.forEach(function(s){ const t=(s.teslim_tarihi||s.tarih); if(t<bugunStr) opGeciken++; else if(t===bugunStr) opTeslim++; if(s.durum==='uretimde') opUretimde++; });
+  h += '<div class="card" style="padding:10px 14px;cursor:pointer" onclick="showPage(\'uretim\')"><div class="flex-between"><span style="font-size:13px">🏭 Bugün teslim <b>'+opTeslim+'</b> · Geciken <b style="color:var('+(opGeciken>0?'--red':'--text')+')">'+opGeciken+'</b> · Üretimde <b>'+opUretimde+'</b></span><span style="font-size:11px;color:var(--text-dim)">Üretim →</span></div></div>';
 
-  // ---- BÖLÜM 4: EN DEĞERLİ FİRMALAR (toplam_satis_dahil DESC, ilk 5)
-  const deg = fg.filter(function(x){return num(x.toplam_satis_dahil)>0;}).sort(function(a,b){return num(b.toplam_satis_dahil)-num(a.toplam_satis_dahil);}).slice(0,5);
-  const s4 = deg.length ? deg.map(function(x){
-    const son=x.son_siparis_gun_once;
-    return row(x.firma_ad, 'Kâr '+TL(x.toplam_kar)+' · '+(son==null?'—':(son+' gün önce')), TL(x.toplam_satis_dahil), '--accent','');
-  }).join('') : emptyBox('🏆','Satış verisi bulunmuyor');
-  h += card('🏆 En Değerli Firmalar', s4);
-
-  // ---- BÖLÜM 5: EN KÂRLI FİRMALAR (toplam_kar DESC, ilk 5)
+  // ---- BÖLÜM 4: SİSTEM UYARILARI ([DASH-V3] En Değerli/Kârlı/Çok Satan Analiz'e taşındı)
   const eksikMaliyet = (typeof URUNLER!=='undefined'?URUNLER:[]).filter(function(u){return u.satis_urunu!==false && !Number(u.birim_maliyet);}).length;
-  const karli = fg.filter(function(x){return num(x.toplam_satis_dahil)>0 || num(x.toplam_kar)!==0;}).sort(function(a,b){return num(b.toplam_kar)-num(a.toplam_kar);}).slice(0,5);
-  const s5w = eksikMaliyet>0 ? '<div style="font-size:12px;color:var(--red);margin-bottom:10px">⚠️ '+eksikMaliyet+' üründe maliyet eksik — kâr olduğundan yüksek görünebilir.</div>' : '';
-  const s5 = karli.length ? karli.map(function(x){
-    const marj = num(x.toplam_satis_haric)>0 ? Math.round(num(x.toplam_kar)/num(x.toplam_satis_haric)*100) : 0;
-    return row(x.firma_ad, 'Satış '+TL(x.toplam_satis_dahil)+' · marj %'+marj, TL(x.toplam_kar), num(x.toplam_kar)>=0?'--green':'--red','');
-  }).join('') : emptyBox('📈','Kârlılık verisi bulunmuyor');
-  h += card('💎 En Kârlı Firmalar', s5w+s5);
-
-  // ---- BÖLÜM 6: EN ÇOK SATAN ÜRÜNLER (v_urun_yillik, ilk 10)
-  const s6 = topUrun.length ? topUrun.map(function(x){
-    return row(x.urun_ad, num(x.toplam_adet)+' adet', TL(x.toplam_dahil), '--text','');
-  }).join('') : emptyBox('📦','Ürün satış verisi bulunmuyor');
-  h += card('🍰 En Çok Satan Ürünler', s6);
-
-  // ---- BÖLÜM 7: SİSTEM UYARILARI
   const fiyatliSet={}; (typeof FIYATLAR!=='undefined'?FIYATLAR:[]).forEach(function(p){ if(p&&p.firma_id) fiyatliSet[p.firma_id]=true; });
   const fiyatsiz = (typeof FIRMALAR!=='undefined'?FIRMALAR:[]).filter(function(f){return !fiyatliSet[f.id];}).length;
-  const uyuyan90 = fg.filter(function(x){return x.son_siparis_gun_once!=null && num(x.son_siparis_gun_once)>=90;}).length;
+  const uyuyan90 = pulse.filter(function(x){return num(x.sessiz_gun)>=90;}).length;
   const uyariList=[];
   if(eksikMaliyet>0) uyariList.push(['💰', eksikMaliyet+' üründe maliyet eksik']);
   if(fiyatsiz>0) uyariList.push(['🏷️', fiyatsiz+' firmada fiyat tanımlı değil']);
@@ -1063,6 +1039,25 @@ async function renderAnaliz(){
   const maxAdet=urunList.length?urunList[0][1]:1;
   const toplamCiro=firmaList.reduce(function(s,x){return s+x[1];},0);
   el.innerHTML='<h1 class="page-title">📈 Analiz</h1><div class="pill-tabs"><div class="pill '+(analizDonem==='hafta'?'active':'')+'" onclick="analizDonem=\'hafta\';renderAnaliz()">Haftalık</div><div class="pill '+(analizDonem==='ay'?'active':'')+'" onclick="analizDonem=\'ay\';renderAnaliz()">Aylık</div><div class="pill '+(analizDonem==='yil'?'active':'')+'" onclick="analizDonem=\'yil\';renderAnaliz()">Yıllık</div></div><div class="stats"><div class="stat"><div class="stat-label">Toplam Ciro</div><div class="stat-value accent">'+TL(toplamCiro)+'</div></div><div class="stat"><div class="stat-label">Sipariş Sayısı</div><div class="stat-value">'+(sips||[]).length+'</div></div><div class="stat"><div class="stat-label">Aktif Firma</div><div class="stat-value">'+firmaList.length+'</div></div></div><div class="card"><div class="card-title">Firma Karşılaştırma (Ciro)</div>'+(firmaList.map(function(x){return '<div style="margin-bottom:10px"><div class="flex-between" style="font-size:13px;margin-bottom:3px"><span>'+x[0]+'</span><strong>'+TL(x[1])+'</strong></div><div style="background:var(--surface2);border-radius:5px;height:8px"><div style="background:var(--accent);height:8px;border-radius:5px;width:'+(x[1]/maxCiro*100)+'%"></div></div></div>';}).join('')||'<div class="empty">Veri yok</div>')+'</div><div class="card"><div class="card-title">En Çok Satan Ürünler (Adet)</div>'+(urunList.map(function(x){return '<div style="margin-bottom:10px"><div class="flex-between" style="font-size:13px;margin-bottom:3px"><span>'+x[0]+'</span><strong>'+x[1]+' adet</strong></div><div style="background:var(--surface2);border-radius:5px;height:8px"><div style="background:var(--green);height:8px;border-radius:5px;width:'+(x[1]/maxAdet*100)+'%"></div></div></div>';}).join('')||'<div class="empty">Veri yok</div>')+'</div>';
+  // ---- [DASH-V3] TÜM ZAMANLAR — Komuta'dan taşınan kartlar (mantık/sorgu birebir; veri kaybı yok)
+  try{
+    const numA=function(x){return Number(x||0);};
+    const rowA=function(name,sub,val,col){return '<div class="hm-row"><div class="hm-main"><div class="hm-name">'+escapeHtml(name||'—')+'</div>'+(sub?'<div class="hm-sub">'+escapeHtml(sub)+'</div>':'')+'</div><div class="hm-val" style="color:var('+(col||'--text')+')">'+(val||'')+'</div></div>';};
+    const ra = await Promise.all([
+      sb.from('v_firma_gecmis').select('*'),
+      sb.from('v_urun_yillik').select('urun_ad,toplam_adet,toplam_dahil').eq('yil',bugun.getFullYear()).order('toplam_dahil',{ascending:false}).limit(10)
+    ]);
+    const fg=(ra[0]&&ra[0].data)||[], topUrun=(ra[1]&&ra[1].data)||[];
+    let ekstra='<h1 class="page-title" style="margin-top:24px;font-size:18px">🗂️ Firmalar & Ürünler (tüm zamanlar)</h1>';
+    const deg = fg.filter(function(x){return numA(x.toplam_satis_dahil)>0;}).sort(function(a,b){return numA(b.toplam_satis_dahil)-numA(a.toplam_satis_dahil);}).slice(0,5);
+    ekstra += '<div class="card"><div class="card-title">🏆 En Değerli Firmalar</div>'+(deg.length?deg.map(function(x){const son=x.son_siparis_gun_once;return rowA(x.firma_ad,'Kâr '+TL(x.toplam_kar)+' · '+(son==null?'—':(son+' gün önce')),TL(x.toplam_satis_dahil),'--accent');}).join(''):'<div class="empty">Satış verisi bulunmuyor</div>')+'</div>';
+    const eksikM = (typeof URUNLER!=='undefined'?URUNLER:[]).filter(function(u){return u.satis_urunu!==false && !Number(u.birim_maliyet);}).length;
+    const karli = fg.filter(function(x){return numA(x.toplam_satis_dahil)>0 || numA(x.toplam_kar)!==0;}).sort(function(a,b){return numA(b.toplam_kar)-numA(a.toplam_kar);}).slice(0,5);
+    const kw = eksikM>0 ? '<div style="font-size:12px;color:var(--red);margin-bottom:10px">⚠️ '+eksikM+' üründe maliyet eksik — kâr olduğundan yüksek görünebilir.</div>' : '';
+    ekstra += '<div class="card"><div class="card-title">💎 En Kârlı Firmalar</div>'+kw+(karli.length?karli.map(function(x){const marj=numA(x.toplam_satis_haric)>0?Math.round(numA(x.toplam_kar)/numA(x.toplam_satis_haric)*100):0;return rowA(x.firma_ad,'Satış '+TL(x.toplam_satis_dahil)+' · marj %'+marj,TL(x.toplam_kar),numA(x.toplam_kar)>=0?'--green':'--red');}).join(''):'<div class="empty">Kârlılık verisi bulunmuyor</div>')+'</div>';
+    ekstra += '<div class="card"><div class="card-title">🍰 En Çok Satan Ürünler ('+bugun.getFullYear()+')</div>'+(topUrun.length?topUrun.map(function(x){return rowA(x.urun_ad,numA(x.toplam_adet)+' adet',TL(x.toplam_dahil),'--text');}).join(''):'<div class="empty">Ürün satış verisi bulunmuyor</div>')+'</div>';
+    el.insertAdjacentHTML('beforeend', ekstra);
+  }catch(e){}
 }
 function showPage_quiet(id){
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
