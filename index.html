@@ -766,24 +766,32 @@ async function sendNot(sid){
   await sb.from('siparisler').update({okunmamis_not:true}).eq('id',sid);
   openSohbet(sid);
 }
+// ===== PRODUCTION PULSE (PP-2) — ürün-bazlı üretim merkezi; Liste görünümü korunur =====
+let uretimGorunum = 'pulse';
+let _uuLastBatch = null;
+let _uuConfirm = null;
+let _uuBusy = false;
 async function renderUretim(){
   const el = document.getElementById('page-uretim');
   el.innerHTML = '<div class="loading">Yükleniyor...</div>';
   const rs = await sb.from('siparisler').select('*').in('durum',['bekleyen','uretimde','hazir']).eq('is_deleted',false).order('teslim_tarihi',{ascending:true,nullsFirst:false});
   const siparisler = rs.data||[];
   const ids = siparisler.map(function(s){return s.id;});
-  let ozet = {};
+  let kalemler = [];
   if(ids.length){
-    const rk = await sb.from('siparis_kalemleri').select('urun_ad,adet,siparis_id').in('siparis_id',ids).eq('is_deleted',false);
-    (rk.data||[]).forEach(function(k){ ozet[k.urun_ad]=(ozet[k.urun_ad]||0)+Number(k.adet); });
+    const rk = await sb.from('siparis_kalemleri').select('siparis_id,urun_id,urun_ad,adet,uretildi_at').in('siparis_id',ids).eq('is_deleted',false);
+    kalemler = rk.data||[];
   }
+  if(uretimGorunum==='pulse'){ renderUretimPulse(el, siparisler, kalemler); return; }
+  let ozet = {};
+  kalemler.forEach(function(k){ ozet[k.urun_ad]=(ozet[k.urun_ad]||0)+Number(k.adet); });
   const ozetList = Object.keys(ozet).map(function(k){return [k,ozet[k]];}).sort(function(a,b){return b[1]-a[1];});
   const bugunStr = today();
   const yd = new Date(); yd.setDate(yd.getDate()+1); const yarinStr = yd.toISOString().slice(0,10);
   function grup(s){ const t=(s.teslim_tarihi||s.tarih); if(t<bugunStr) return 'geciken'; if(t===bugunStr) return 'bugun'; if(t===yarinStr) return 'yarin'; return 'sonraki'; }
   const gruplar = {geciken:[],bugun:[],yarin:[],sonraki:[]};
   siparisler.forEach(function(s){ gruplar[grup(s)].push(s); });
-  let h = '<h1 class="page-title">🏭 Üretim</h1><div class="page-desc">'+trDate(bugunStr)+' · teslim tarihine göre</div>';
+  let h = '<div class="flex-between mb"><h1 class="page-title">🏭 Üretim</h1>'+uretimToggleHtml()+'</div><div class="page-desc">'+trDate(bugunStr)+' · teslim tarihine göre</div>';
   h += '<div class="card"><div class="card-title">📦 Üretilecek Toplam (aktif)</div>'+(ozetList.length?'<div class="table-wrap"><table>'+ozetList.map(function(x){return '<tr><td>'+x[0]+'</td><td style="text-align:right;font-weight:700;font-size:18px;color:var(--accent)">'+x[1]+'</td></tr>';}).join('')+'</table></div>':'<div class="empty">Üretilecek sipariş yok</div>')+'</div>';
   const basliklar = {geciken:'🔴 GECİKEN', bugun:'📅 BUGÜN', yarin:'⏭️ YARIN', sonraki:'🗓️ SONRAKİ'};
   ['geciken','bugun','yarin','sonraki'].forEach(function(g){
@@ -797,6 +805,110 @@ async function renderUretim(){
     });
   });
   el.innerHTML = h;
+}
+function uretimToggleHtml(){
+  return '<div class="pill-tabs" style="margin:0"><div class="pill '+(uretimGorunum==='pulse'?'active':'')+'" style="min-height:44px;display:flex;align-items:center" onclick="uretimGorunum=\'pulse\';renderUretim()">📦 Ürün</div><div class="pill '+(uretimGorunum==='liste'?'active':'')+'" style="min-height:44px;display:flex;align-items:center" onclick="uretimGorunum=\'liste\';renderUretim()">📋 Liste</div></div>';
+}
+function renderUretimPulse(el, siparisler, kalemler){
+  const bugunStr = today();
+  // SAYAÇLAR — Dashboard operasyon satırı ile BİREBİR AYNI tanım (teslim_tarihi||tarih)
+  let opTeslim=0, opGeciken=0, opUretimde=0, opHazir=0;
+  siparisler.forEach(function(s){ const t=(s.teslim_tarihi||s.tarih); if(t<bugunStr) opGeciken++; else if(t===bugunStr) opTeslim++; if(s.durum==='uretimde') opUretimde++; if(s.durum==='hazir') opHazir++; });
+  const sipMap={}; siparisler.forEach(function(s){ sipMap[s.id]=s; });
+  // sipariş başına işaretsiz kalem var mı (accordion rozetleri + hazır-ama-işaretsiz uyarısı)
+  const eksikMap={}; let hazirIsaretsiz=0;
+  kalemler.forEach(function(k){ if(!k.uretildi_at){ eksikMap[k.siparis_id]=(eksikMap[k.siparis_id]||0)+1; } });
+  Object.keys(eksikMap).forEach(function(sid){ const s=sipMap[sid]; if(s&&s.durum==='hazir') hazirIsaretsiz++; });
+  // ürün toplama: yalnız bekleyen/uretimde + kilitsiz siparişlerin kalemleri
+  const urunler={};
+  kalemler.forEach(function(k){
+    const s=sipMap[k.siparis_id]; if(!s) return;
+    if(s.durum!=='bekleyen' && s.durum!=='uretimde') return;
+    if(s.kilitli) return;
+    const key=k.urun_id||('ad:'+k.urun_ad);
+    if(!urunler[key]) urunler[key]={uid:k.urun_id, ad:k.urun_ad, toplam:0, uretilen:0, kalan:0, firmalar:{}, sipSet:{}};
+    const u=urunler[key];
+    u.toplam+=Number(k.adet||0);
+    if(k.uretildi_at) u.uretilen+=Number(k.adet||0); else u.kalan+=Number(k.adet||0);
+    u.sipSet[s.id]=1;
+    const fad=(FIRMALAR.find(function(x){return x.id===s.firma_id;})||{}).ad||'?';
+    if(!u.firmalar[fad]) u.firmalar[fad]=[];
+    u.firmalar[fad].push({adet:Number(k.adet||0), teslim:(s.teslim_tarihi||s.tarih), isaretli:!!k.uretildi_at, sid:s.id});
+  });
+  const liste=Object.keys(urunler).map(function(k){return urunler[k];}).filter(function(u){return u.kalan>0;}).sort(function(a,b){return b.kalan-a.kalan;});
+
+  let h = '<div class="flex-between mb"><h1 class="page-title">🏭 Üretim</h1>'+uretimToggleHtml()+'</div><div class="page-desc">'+trDate(bugunStr)+' · ürün bazlı</div>';
+  const sayac=function(lbl,val,col){ return '<div class="stat" style="padding:12px"><div class="stat-label">'+lbl+'</div><div class="stat-value" style="font-size:22px;color:var('+col+')">'+val+'</div></div>'; };
+  h += '<div class="stats" style="grid-template-columns:repeat(4,1fr);gap:8px">'
+    + sayac('Geciken', opGeciken, opGeciken>0?'--red':'--text')
+    + sayac('Bugün', opTeslim, '--accent')
+    + sayac('Üretimde', opUretimde, '--text')
+    + sayac('Hazır-Sevk', opHazir, opHazir>0?'--green':'--text')
+    + '</div>';
+  if(hazirIsaretsiz>0){ h += '<div class="card" style="padding:9px 14px;border-color:var(--yellow)"><span style="font-size:13px;color:var(--yellow)">⚠ '+hazirIsaretsiz+' hazır siparişte işaretsiz kalem var (sonradan kalem eklenmiş olabilir)</span></div>'; }
+  if((CURRENT.rol==='admin'||CURRENT.rol==='mudur') && _uuLastBatch){
+    h += '<div style="text-align:right;margin:-4px 0 8px"><button class="btn btn-sec btn-sm" style="min-height:44px" onclick="uuGeriAl()">↩ Son işareti geri al</button></div>';
+  }
+  if(!liste.length){
+    h += '<div class="empty"><div class="empty-ico">🏭</div>Üretilecek ürün yok'+(opHazir>0?' — '+opHazir+' sipariş sevk bekliyor':'')+'</div>';
+  } else {
+    liste.forEach(function(u){
+      const btnId='uu-btn-'+(u.uid||'x');
+      const kismi = u.uretilen>0 ? '<span class="tag tag-yellow" style="margin-left:8px">'+u.uretilen+'/'+u.toplam+' üretildi</span>' : '';
+      const sipSay=Object.keys(u.sipSet).length, firmaSay=Object.keys(u.firmalar).length;
+      const detay=Object.keys(u.firmalar).map(function(fad){
+        return u.firmalar[fad].map(function(r){
+          const s=sipMap[r.sid];
+          const baskaEksik=(eksikMap[r.sid]||0) - (r.isaretli?0:1);
+          return '<div class="flex-between" style="padding:8px 0;border-bottom:1px solid var(--border);font-size:14px"><span>'+escapeHtml(fad)+' <span style="color:var(--text-dim);font-size:12px">· teslim '+trDate(r.teslim)+(s&&s.durum==='uretimde'?' · üretimde':'')+'</span></span><span style="white-space:nowrap"><b>'+r.adet+'</b> '+(r.isaretli?'<span class="tag tag-green">✓</span>':(baskaEksik>0?'<span class="tag tag-dim" title="siparişin diğer ürünleri de bekliyor">+'+baskaEksik+' kalem</span>':''))+'</span></div>';
+        }).join('');
+      }).join('');
+      h += '<div class="card" style="padding:14px;margin-bottom:10px">'
+        + '<div class="flex-between" style="gap:10px;flex-wrap:wrap">'
+        +   '<div style="min-width:0"><div style="font-size:17px;font-weight:700">'+escapeHtml(u.ad)+kismi+'</div>'
+        +   '<div style="font-size:13px;color:var(--text-dim);margin-top:2px">Kalan <b style="font-size:20px;color:var(--accent)">'+u.kalan+'</b> adet · '+firmaSay+' firma · '+sipSay+' sipariş</div></div>'
+        +   (u.uid?'<button class="btn" id="'+btnId+'" style="min-height:48px;min-width:150px;font-size:15px" onclick="uuTap(\''+u.uid+'\',\''+escapeHtml(u.ad).replace(/'/g,"\\'")+'\')">✓ Üretildi</button>'
+                 :'<button class="btn btn-sec" style="min-height:48px" disabled title="katalog dışı kalem">—</button>')
+        + '</div>'
+        + '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:13px;color:var(--text-dim);padding:8px 0;min-height:28px">▸ Firma / sipariş detayı</summary>'+detay+'</details>'
+        + '</div>';
+    });
+  }
+  el.innerHTML = h;
+}
+function uuTap(uid, ad){
+  if(_uuBusy) return;
+  const btn=document.getElementById('uu-btn-'+uid); if(!btn) return;
+  if(_uuConfirm && _uuConfirm.key===uid){ clearTimeout(_uuConfirm.timer); _uuConfirm=null; uuCalistir(uid, ad); return; }
+  if(_uuConfirm){ const eski=document.getElementById('uu-btn-'+_uuConfirm.key); if(eski){ eski.textContent='✓ Üretildi'; eski.style.background=''; } clearTimeout(_uuConfirm.timer); }
+  btn.textContent='Onayla?'; btn.style.background='var(--yellow)';
+  _uuConfirm={key:uid, timer:setTimeout(function(){ _uuConfirm=null; const b=document.getElementById('uu-btn-'+uid); if(b){ b.textContent='✓ Üretildi'; b.style.background=''; } }, 3000)};
+}
+async function uuCalistir(uid, ad){
+  _uuBusy=true;
+  const btn=document.getElementById('uu-btn-'+uid); if(btn){ btn.disabled=true; btn.textContent='İşleniyor...'; btn.style.background=''; }
+  const key=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'-'+Math.random();
+  const r=await sb.rpc('urun_uretildi',{p_urun_id:uid, p_idempotency_key:key});
+  _uuBusy=false;
+  if(r.error || !r.data || r.data.status==='failed'){
+    toast('⛔ İşaretlenemedi', (r.error&&r.error.message)||(r.data&&r.data.reason)||'RPC hatası');
+    renderUretim(); return;
+  }
+  const d=r.data;
+  if(d.status!=='noop') _uuLastBatch=d.batch_id||null;
+  toast('✅ '+ad, (d.kalem_isaretlendi||0)+' kalem işaretlendi · '+(d.hazir_olan||0)+' sipariş hazır · '+(d.eksik_kalemli_bekleyen||0)+' sipariş bekliyor');
+  renderUretim();
+}
+async function uuGeriAl(){
+  if(CURRENT.rol!=='admin' && CURRENT.rol!=='mudur') return;
+  if(!_uuLastBatch) return;
+  const r=await sb.rpc('urun_uretildi_geri_al',{p_batch_id:_uuLastBatch});
+  if(r.error || !r.data || r.data.status!=='completed'){
+    toast('⛔ Geri alınamadı', (r.error&&r.error.message)||(r.data&&r.data.reason)||''); return;
+  }
+  toast('↩ Geri alındı', (r.data.kalem_temizlendi||0)+' kalem işareti temizlendi');
+  _uuLastBatch=null;
+  renderUretim();
 }
 async function openUretimDetay(sid){
   const rk = await sb.from('siparis_kalemleri').select('urun_ad,adet').eq('siparis_id',sid);
