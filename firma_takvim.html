@@ -561,11 +561,11 @@ async function renderOzet(){
   if(fgErisim){
     h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>🤝 Görüşme Günlüğü</b><button class="b s" style="font-size:12px;padding:8px 12px;min-height:40px" onclick="openRel()">➕ Görüşme Ekle</button></div>';
     if(gorusmeler.length){
-      h+=gorusmeler.map(function(g){
-        return '<div style="padding:8px 0;border-bottom:1px solid var(--bd)"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--dm)"><span>'+trd(g.gorusme_tarihi)+(g.gorusen_kisi?' · '+esc(g.gorusen_kisi):'')+'</span><span>'+esc(g.yazan||'')+(g.kaynak==='import_localstorage'?' · 📲 aktarım':'')+'</span></div>'
-          +'<div style="font-size:13px;margin-top:3px;white-space:pre-wrap;line-height:1.5">'+esc(g.not_metni)+'</div>'
-          +(g.sonraki_aksiyon_tarihi?'<div style="font-size:12px;color:var(--ac);margin-top:3px">⏭ Sonraki aksiyon: '+trd(g.sonraki_aksiyon_tarihi)+'</div>':'')+'</div>';
-      }).join('');
+      var g0=gorusmeler[0];
+      h+='<div style="padding:8px 0"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--dm)"><span>'+trd(g0.gorusme_tarihi)+(g0.gorusen_kisi?' · '+esc(g0.gorusen_kisi):'')+'</span><span>'+esc(g0.yazan||'')+(g0.kaynak==='import_localstorage'?' · 📲 aktarım':'')+'</span></div>'
+        +'<div style="font-size:13px;margin-top:3px;white-space:pre-wrap;line-height:1.5">'+esc(g0.not_metni)+'</div>'
+        +(g0.sonraki_aksiyon_tarihi?'<div style="font-size:12px;color:var(--ac);margin-top:3px">⏭ Sonraki aksiyon: '+trd(g0.sonraki_aksiyon_tarihi)+'</div>':'')+'</div>'
+        +'<div style="font-size:12px;border-top:1px solid var(--bd);padding-top:7px"><a href="javascript:void(0)" onclick="setTab(\'gecmis\')" style="color:var(--ac);text-decoration:none">🕒 Tüm geçmiş ('+gorusmeler.length+(gorusmeler.length>=5?'+':'')+' kayıt) →</a></div>';
     } else h+='<div style="color:var(--dm);font-size:13px;margin-top:4px">Henüz görüşme kaydı yok — her kayıt tarihçeye eklenir, üzerine yazılmaz.</div>';
     h+='</div>';
   }
@@ -976,11 +976,108 @@ async function doAddPrice(){
 }
 
 // ═══ 📋 GEÇMİŞ ═══
+// ═══ [TL-REV5] CUSTOMER TIMELINE — read-only hikâye akışı; eski liste "Liste" toggle'ında korunur ═══
+let gecmisGorunum='timeline';
+function tlToggle(id){ var d=document.getElementById(id); if(!d) return; var acik=d.style.display!=='none'; d.style.display=acik?'none':'block'; var ch=document.getElementById(id+'-ch'); if(ch) ch.textContent=acik?'▾':'▴'; }
+function tlGun(t){ if(!t) return ''; var b=tdy(); if(t===b) return '<b>bugün</b>'; return String(t).slice(8,10)+'.'+String(t).slice(5,7); }
+function gecmisToggleHtml(){ return '<div style="display:flex;gap:6px"><button class="b'+(gecmisGorunum==='timeline'?'':' s')+'" style="font-size:12px;padding:8px 12px;min-height:40px" onclick="gecmisGorunum=\'timeline\';renderGecmis()">🕒 Hikâye</button><button class="b'+(gecmisGorunum==='liste'?'':' s')+'" style="font-size:12px;padding:8px 12px;min-height:40px" onclick="gecmisGorunum=\'liste\';renderGecmis()">📋 Liste</button></div>'; }
 async function renderGecmis(){
   const c=document.getElementById('content');
+  c.innerHTML='<div class="card">Yükleniyor…</div>';
+  if(gecmisGorunum==='liste'){ return renderGecmisListe(c); }
+  const fid=cF, bugun=tdy();
+  const bas90=_isoLocal(new Date(Date.now()-90*86400000));
+  const res=await Promise.all([
+    sb.from('v_firma_pulse').select('health_skor,health_renk,sessiz_gun,acik_bakiye').eq('firma_id',fid).maybeSingle(),
+    sb.from('firma_gorusmeleri').select('*').eq('firma_id',fid).gte('gorusme_tarihi',bas90).order('gorusme_tarihi',{ascending:false}).order('olusturma',{ascending:false}).limit(200),
+    sb.from('siparisler').select('id,tarih,siparis_no,durum,toplam_kdv_dahil,iptal_nedeni,iptal_eden_kullanici,created_by,olusturma,uretimde_at,hazir_at,sevk_at,faturalandi_at,tahsil_at').eq('firma_id',fid).eq('is_deleted',false).gte('tarih',bas90).order('tarih',{ascending:false}).limit(200),
+    sb.from('tahsilatlar').select('id,tarih,tutar,odeme_tipi,cek_durumu,created_by,olusturma').eq('firma_id',fid).eq('is_deleted',false).gte('tarih',bas90).order('tarih',{ascending:false}).limit(200)
+  ]);
+  const pv=(res[0]&&res[0].data)||null;
+  const gor=(res[1]&&res[1].data)||[];
+  const sips=(res[2]&&res[2].data)||[];
+  const tahs=(res[3]&&res[3].data)||[];
+  let notlar=[]; const sids=sips.map(function(s){return s.id;});
+  if(sids.length){ const rn=await sb.from('siparis_notlari').select('siparis_id,yazan,mesaj,olusturma').in('siparis_id',sids).order('olusturma',{ascending:false}).limit(200); notlar=rn.data||[]; }
+
+  // ── olay listesi (doğal dil; durum geçişleri ayrı satır DEĞİL — gövde mikro-satırı)
+  const DSIRA={bekleyen:0,uretimde:1,hazir:2,sevk_edildi:3,faturalandi:4,tahsil_edildi:5,tamamlandi:6,iptal:0};
+  const ev=[];
+  gor.forEach(function(g){
+    var gec = g.sonraki_aksiyon_tarihi && g.sonraki_aksiyon_tarihi<bugun;
+    ev.push({tarih:g.gorusme_tarihi, ts:g.olusturma, serit:'--dm', ikon:'📞',
+      baslik:(g.gorusen_kisi?esc(g.gorusen_kisi)+' ile görüşüldü':'Görüşme kaydedildi'),
+      sag:(g.sonraki_aksiyon_tarihi?'<span style="font-size:12px;color:var('+(gec?'--rd':'--ac')+')">'+(gec?'takip gecikti':tlGun(g.sonraki_aksiyon_tarihi)+' takip')+'</span>':''),
+      det:'<div style="white-space:pre-wrap">'+esc(g.not_metni)+'</div><div style="font-size:11px;color:var(--dm);margin-top:4px">'+esc(g.yazan||'')+(g.kaynak==='import_localstorage'?' · 📲 aktarım':'')+' · '+trd(g.gorusme_tarihi)+(g.sonraki_aksiyon_tarihi?' · sonraki aksiyon '+trd(g.sonraki_aksiyon_tarihi):'')+'</div>'});
+  });
+  tahs.forEach(function(t){
+    var kars=(t.cek_durumu==='karsiliksiz');
+    ev.push({tarih:t.tarih, ts:t.olusturma, serit:(kars?'--rd':'--gn'), ikon:'💰',
+      baslik:(kars?'Çek karşılıksız — '+TL(t.tutar):TL(t.tutar)+(t.odeme_tipi==='cek'?' çek alındı':' tahsil edildi')),
+      sag:'',
+      det:'<div style="font-size:11px;color:var(--dm)">'+esc(t.odeme_tipi||'')+(t.cek_durumu?' · çek: '+esc(t.cek_durumu):'')+' · '+esc(t.created_by||'')+' · '+trd(t.tarih)+'</div>'});
+  });
+  sips.forEach(function(s){
+    var d=DSIRA[s.durum]!=null?DSIRA[s.durum]:0;
+    var fiil='verildi', serit='--ac';
+    if(s.durum==='iptal'){ fiil='iptal edildi'; serit='--rd'; }
+    else if(s.sevk_at && d>=3) fiil='sevk edildi';
+    else if(s.hazir_at && d>=2) fiil='hazırlandı';
+    else if(s.uretimde_at && d>=1) fiil='üretimde';
+    var mikro=[];
+    mikro.push('verildi '+trd(s.tarih)+(s.created_by?' · '+esc(s.created_by):''));
+    if(s.uretimde_at && d>=1) mikro.push('üretime alındı '+String(s.uretimde_at).slice(11,16));
+    if(s.hazir_at && d>=2) mikro.push('hazırlandı '+String(s.hazir_at).slice(11,16));
+    if(s.sevk_at && d>=3) mikro.push('sevk '+String(s.sevk_at).slice(11,16));
+    if(s.faturalandi_at && d>=4) mikro.push('faturalandı');
+    if(s.durum==='iptal') mikro.push('<span style="color:var(--rd)">iptal'+(s.iptal_nedeni?' — '+esc(s.iptal_nedeni):'')+(s.iptal_eden_kullanici?' ('+esc(s.iptal_eden_kullanici)+')':'')+'</span>');
+    ev.push({tarih:s.tarih, ts:s.olusturma, serit:serit, ikon:'📦',
+      baslik:'Sipariş #'+esc((s.siparis_no||'').slice(-4))+' '+fiil,
+      sag:'<b style="font-size:13px">'+TL(s.toplam_kdv_dahil)+'</b>',
+      det:'<div style="font-size:12px;color:var(--dm)">↳ '+mikro.join(' · ')+'</div><div style="font-size:11px;color:var(--dm);margin-top:3px">'+esc(s.siparis_no||'')+' · KDV dahil</div>'});
+  });
+  var sipNoMap={}; sips.forEach(function(s){ sipNoMap[s.id]=(s.siparis_no||'').slice(-4); });
+  notlar.forEach(function(n){
+    ev.push({tarih:String(n.olusturma).slice(0,10), ts:n.olusturma, serit:'--dm', ikon:'📝',
+      baslik:'Not eklendi', sag:'<span style="font-size:11px;color:var(--dm)">#'+esc(sipNoMap[n.siparis_id]||'')+'</span>',
+      det:'<div style="white-space:pre-wrap">'+esc(n.mesaj)+'</div><div style="font-size:11px;color:var(--dm);margin-top:4px">'+esc(n.yazan||'')+' · '+new Date(n.olusturma).toLocaleString('tr-TR')+'</div>'});
+  });
+  ev.sort(function(a,b){ if(a.tarih!==b.tarih) return a.tarih<b.tarih?1:-1; return String(a.ts)<String(b.ts)?1:-1; });
+
+  // ── ŞU AN şeridi (4 sinyal; dokunuş Özet'e — özet↔detay köprüsü, bilgi deposu değil)
+  let h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="font-size:15px">🕒 Müşteri Hikâyesi <span style="font-size:11px;color:var(--dm);font-weight:400">son 90 gün · '+ev.length+' olay</span></b>'+gecmisToggleHtml()+'</div>';
+  if(pv){
+    var fut=null, past=null;
+    gor.forEach(function(g){ var dd=g.sonraki_aksiyon_tarihi; if(!dd) return; if(dd>=bugun){ if(!fut||dd<fut)fut=dd; } else { if(!past||dd>past)past=dd; } });
+    var takip = fut ? ('takip '+tlGun(fut)) : (past?'<span style="color:var(--rd)">takip gecikti ('+tlGun(past)+')</span>':'takip —');
+    var prenk = pv.health_renk==='yesil'?'--gn':(pv.health_renk==='sari'?'--ac':'--rd');
+    var acik = Number(pv.acik_bakiye||0);
+    h+='<div class="card" style="padding:10px 14px;cursor:pointer;margin-bottom:10px" onclick="setTab(\'ozet\')"><div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;align-items:baseline">'
+      +'<span><span style="color:var('+prenk+')">●</span> <b>'+pv.health_skor+'</b>/100</span>'
+      +(pv.sessiz_gun!=null?'<span style="color:var(--dm)">'+pv.sessiz_gun+'g sessiz</span>':'')
+      +'<span>'+takip+'</span>'
+      +'<span style="color:var(--dm)">açık <b style="color:var('+(acik>0?'--rd':'--gn')+')">'+TL(acik)+'</b></span>'
+      +'<span style="margin-left:auto;font-size:11px;color:var(--dm)">Özet →</span></div></div>';
+  }
+  // ── akış
+  if(!ev.length){
+    h+='<div class="card" style="text-align:center;padding:28px;color:var(--dm)"><div style="font-size:34px">🕒</div><div style="margin-top:6px;font-size:14px">Son 90 günde hareket yok</div><div style="font-size:12px;margin-top:4px">Bu firmanın hikâyesi burada birikecek.</div><button class="b" style="margin-top:12px;min-height:44px" onclick="openRel()">➕ Görüşme Ekle</button></div>';
+  } else {
+    h+='<div class="card" style="padding:2px 0">';
+    ev.forEach(function(e,i){
+      h+='<div onclick="tlToggle(\'tl'+i+'\')" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:11px 12px;border-left:3px solid var('+e.serit+');border-bottom:1px solid var(--bd);cursor:pointer;min-height:44px">'
+        +'<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px"><span style="color:var(--dm);font-size:12px">'+tlGun(e.tarih)+'</span> '+e.ikon+' '+e.baslik+'</span>'
+        +'<span style="white-space:nowrap;display:flex;align-items:center;gap:6px">'+(e.sag||'')+'<span id="tl'+i+'-ch" style="color:var(--dm);opacity:.45;font-size:10px">▾</span></span></div>'
+        +'<div id="tl'+i+'" style="display:none;padding:8px 14px 12px;border-left:3px solid var('+e.serit+');border-bottom:1px solid var(--bd);font-size:13px;background:var(--s2)">'+e.det+'</div>';
+    });
+    h+='</div>';
+  }
+  c.innerHTML=h;
+}
+async function renderGecmisListe(c){
   const r=await sb.from('siparisler').select('id,tarih,siparis_no,durum,fatura_durumu,toplam_kdv_dahil').eq('firma_id',cF).eq('is_deleted',false).order('tarih',{ascending:false}).limit(200);
   const sips=r.data||[];
-  let h='<div class="card"><b>Sipariş Geçmişi ('+sips.length+')</b>';
+  let h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>Sipariş Geçmişi ('+sips.length+')</b>'+gecmisToggleHtml()+'</div>';
   if(!sips.length) h+='<div style="color:var(--dm);margin-top:8px">Sipariş yok.</div>';
   else{h+='<table class="rpt"><tr><th>Tarih</th><th>No</th><th>Durum</th><th class="n">Tutar</th><th></th></tr>';
     sips.forEach(s=>{const dc=s.durum==='iptal'?'color:var(--rd)':s.durum==='tamamlandi'?'color:var(--gn)':'';
