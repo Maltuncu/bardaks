@@ -687,7 +687,7 @@ async function renderSiparis(){
 }
 function openYeniSiparis(){
   const firmaOpts = FIRMALAR.map(function(f){return '<option value="'+f.id+'">'+f.ad+'</option>';}).join('');
-  openModal('<div class="modal-head"><h3>Yeni Sipariş</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Firma</label><select id="ysFirma" onchange="ysLoadUrunler()">'+firmaOpts+'</select><label>Sipariş Tarihi</label><input type="date" id="ysTarih" value="'+today()+'"><label class="mt">Teslim Tarihi</label><input type="date" id="ysTeslim" value="'+today()+'"><div id="ysUrunler" class="mt"></div><div id="ysToplam" class="mt" style="font-weight:700; text-align:right"></div><button class="btn btn-block mt" onclick="kaydetSiparis()">Siparişi Kaydet</button>');
+  openModal('<div class="modal-head"><h3>Yeni Sipariş</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Firma</label><select id="ysFirma" onchange="ysLoadUrunler()">'+firmaOpts+'</select><label>Sipariş Tarihi</label><input type="date" id="ysTarih" value="'+today()+'"><label class="mt">Teslim Tarihi</label><input type="date" id="ysTeslim" value="'+today()+'"><div id="ysUrunler" class="mt"></div><div id="ysFooter" style="position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);padding:12px 0 4px;margin-top:8px"><div id="ysToplam" style="font-weight:800;font-size:20px;text-align:right;margin-bottom:8px"></div><button class="btn btn-block" style="font-size:16px;padding:14px;min-height:48px" onclick="kaydetSiparis()">Siparişi Kaydet</button></div>');
   ysLoadUrunler();
 }
 let ysSatirlar = [];
@@ -697,24 +697,34 @@ function ysLoadUrunler(){
   ysSatirlar = fiyatlar.map(function(p){return {urun_id:p.urun_id, ad:p.urun_ad, fiyat:p.birim_fiyat_kdv_haric, kdv:p.kdv_orani, adet:0};});
   const c = document.getElementById('ysUrunler');
   if(!ysSatirlar.length){ c.innerHTML='<div class="empty">Bu firmaya tanımlı ürün yok. Önce Firmalar ekranından ürün ekle.</div>'; return; }
-  c.innerHTML = '<label>Ürünler (adet gir)</label>' + ysSatirlar.map(function(s,i){return '<div class="flex-between" style="padding:8px 0; border-bottom:1px solid var(--border)"><div><div>'+s.ad+'</div><div style="font-size:12px;color:var(--text-dim)">'+TL(s.fiyat)+'/birim (KDV hariç)</div></div><input type="number" min="0" style="width:80px; text-align:center" value="0" oninput="ysSatirlar['+i+'].adet=Number(this.value)||0; ysHesap()"></div>';}).join('');
+  c.innerHTML = '<label>Ürünler (adet gir)</label>' + ysSatirlar.map(function(s,i){return '<div class="flex-between" style="padding:8px 0; border-bottom:1px solid var(--border)"><div><div>'+s.ad+'</div><div style="font-size:12px;color:var(--text-dim)">'+TL(s.fiyat)+'/birim (KDV hariç)</div></div><input type="number" min="0" step="1" inputmode="numeric" data-ys-idx="'+i+'" style="width:80px; text-align:center" value="0" oninput="ysSync(this); ysHesap()" onchange="ysSync(this); ysHesap()"></div>';}).join('');
   ysHesap();
 }
+// P0 DOM-SOURCE FALLBACK: adet'i tek doğruluk kaynağı olarak DOM input'larından oku (state kaybına karşı sağlamlaştırma)
+function ysAdetOf(inp){ return Math.max(0, Math.floor(Number(inp && inp.value)||0)); }
+function ysSync(inp){ var i=+inp.getAttribute('data-ys-idx'); if(ysSatirlar[i]) ysSatirlar[i].adet = ysAdetOf(inp); }
+function ysReadFromDOM(){
+  var inputs = document.querySelectorAll('#ysUrunler input[data-ys-idx]');
+  inputs.forEach(function(inp){ var i=+inp.getAttribute('data-ys-idx'); if(ysSatirlar[i]) ysSatirlar[i].adet = ysAdetOf(inp); });
+}
 function ysHesap(){
-  let t = ysSatirlar.reduce(function(s,r){return s + r.adet*r.fiyat*(1+r.kdv/100);}, 0);
+  ysReadFromDOM();
+  let t = ysSatirlar.reduce(function(s,r){return s + (r.adet||0)*r.fiyat*(1+r.kdv/100);}, 0);
   document.getElementById('ysToplam').textContent = 'Toplam (KDV dahil): '+TL(t);
 }
 async function kaydetSiparis(){
   const fid = document.getElementById('ysFirma').value;
   const tarih = document.getElementById('ysTarih').value;
   const teslim = (document.getElementById('ysTeslim')||{}).value || tarih;
+  ysReadFromDOM();
   const dolu = ysSatirlar.filter(function(s){return s.adet>0;});
   if(!dolu.length){ alert('En az bir ürüne adet gir'); return; }
   if(dolu.some(function(s){return !s.urun_id;})){ alert('Katalog dışı ürün var — kaydedilemez. Tüm ürünler master katalogdan seçilmelidir.'); return; }
   const r = await sb.from('siparisler').insert({ firma_id:fid, tarih:tarih, teslim_tarihi:teslim, durum:'bekleyen', created_by:CURRENT.ad_soyad, last_updated_by:CURRENT.ad_soyad }).select().single();
-  if(r.error){ alert('Hata: '+r.error.message); return; }
+  if(r.error){ console.error('[siparis] başlık insert hatası:', r.error); alert('Sipariş kaydedilemedi. Lütfen tekrar deneyin. Sorun sürerse yöneticinize bildirin.'); return; }
   const kalemler = dolu.map(function(s){return { siparis_id:r.data.id, urun_id:s.urun_id, urun_ad:s.ad, adet:s.adet, birim_fiyat_kdv_haric:s.fiyat, kdv_orani:s.kdv };});
-  await sb.from('siparis_kalemleri').insert(kalemler);
+  const rk = await sb.from('siparis_kalemleri').insert(kalemler);
+  if(rk.error){ console.error('[siparis] kalem insert hatası:', rk.error); alert('Sipariş kalemleri kaydedilemedi. Lütfen tekrar deneyin. Sorun sürerse yöneticinize bildirin.'); return; }
   closeModal();
   toast('✅ Sipariş kaydedildi', 'İmalathaneye bildirim gönderildi');
   renderSiparis();
