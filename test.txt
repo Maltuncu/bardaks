@@ -4,3 +4,5 @@ Canlı: https://maltuncu.github.io/bardaks/
 
 3 rol: Yönetici / Müdür / İmalathane
 Supabase Auth ile güvenli giriş.
+
+<!-- deploy-trigger: 2026-06-14 P0 order-entry DOM-fallback propagation -->
