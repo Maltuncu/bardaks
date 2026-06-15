@@ -690,8 +690,8 @@ function openYeniSiparis(){
   openModal('<div class="modal-head"><h3>Yeni Sipariş</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Firma</label><select id="ysFirma" onchange="ysLoadUrunler()">'+firmaOpts+'</select><label>Sipariş Tarihi</label><input type="date" id="ysTarih" value="'+today()+'"><label class="mt">Teslim Tarihi</label><input type="date" id="ysTeslim" value="'+today()+'"><div id="ysUrunler" class="mt"></div><div id="ysFooter" style="position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);padding:12px 0 4px;margin-top:8px"><div id="ysToplam" style="font-weight:800;font-size:20px;text-align:right;margin-bottom:8px"></div><button class="btn btn-block" style="font-size:16px;padding:14px;min-height:48px" onclick="kaydetSiparis()">Siparişi Kaydet</button></div>');
   ysLoadUrunler();
 }
-let ysSatirlar = [];
-function ysLoadUrunler(){
+var ysSatirlar = [];
+  function ysLoadUrunler(){
   const fid = document.getElementById('ysFirma').value;
   const fiyatlar = FIYATLAR.filter(function(p){return p.firma_id===fid;});
   ysSatirlar = fiyatlar.map(function(p){return {urun_id:p.urun_id, ad:p.urun_ad, fiyat:p.birim_fiyat_kdv_haric, kdv:p.kdv_orani, adet:0};});
