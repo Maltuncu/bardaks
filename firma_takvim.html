@@ -1142,6 +1142,9 @@ async function qoRender(tarih){
   // BÖLÜM A — o günün mevcut siparişleri
   var rs=await sb.from('siparisler').select('id,siparis_no,durum,toplam_kdv_dahil').eq('firma_id',cF).eq('tarih',tarih).eq('is_deleted',false).order('olusturma',{ascending:true});
   var gunSip=rs.data||[];
+  var _gids=gunSip.map(function(s){return s.id;}); var _gk={};
+  if(_gids.length){ var _rgk=await sb.from('siparis_kalemleri').select('siparis_id,urun_ad,adet').in('siparis_id',_gids).eq('is_deleted',false);
+    (_rgk.data||[]).forEach(function(k){ (_gk[k.siparis_id]=_gk[k.siparis_id]||[]).push(k); }); }
   // BÖLÜM B — firma portföyü
   var port=FY.filter(function(p){return p.firma_id===cF;}).sort(function(a,b){return (a.urun_ad||'').localeCompare(b.urun_ad||'','tr');});
   window._qoRows=port.map(function(p){return {urun_id:p.urun_id,ad:p.urun_ad,fiyat:+p.birim_fiyat_kdv_haric,kdv:+(p.kdv_orani||1),gramaj:((UR.find(function(u){return u.id===p.urun_id;})||{}).gramaj||''),adet:0};});
@@ -1149,7 +1152,14 @@ async function qoRender(tarih){
   h+='<div style="color:var(--ac);font-weight:700;margin-bottom:8px">'+esc(fname)+'</div>';
   h+='<div style="font-weight:700;font-size:13px;margin:2px 0 6px">📋 Bu Günün Siparişleri</div>';
   if(gunSip.length){
-    h+=gunSip.map(function(s){return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)"><span style="font-size:13px">'+esc(s.siparis_no||'—')+' <span style="font-size:11px;color:var(--dm)">('+esc(s.durum||'')+')</span></span><b>'+TL(s.toplam_kdv_dahil)+'</b></div>';}).join('');
+    h+=gunSip.map(function(s){
+      var _kk=_gk[s.id]||[]; var _ta=_kk.reduce(function(a,k){return a+(+k.adet||0);},0);
+      var _ln=_kk.length?_kk.map(function(k){return '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--dm);padding:2px 0"><span>'+esc(k.urun_ad||'?')+'</span><span>\u00d7'+AD(k.adet)+'</span></div>';}).join(''):'<div style="font-size:12px;color:var(--dm)">kalem bilgisi yok</div>';
+      return '<div style="padding:8px 0;border-bottom:1px solid var(--bd)">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px">'+esc(s.siparis_no||'\u2014')+' <span style="font-size:11px;color:var(--dm)">('+esc(s.durum||'')+')</span></span><b>'+TL(s.toplam_kdv_dahil)+'</b></div>'
+        +'<div style="margin-top:4px">'+_ln+'</div>'
+        +'<div style="text-align:right;font-size:11px;color:var(--dm);margin-top:2px">toplam '+AD(_ta)+' adet</div>'
+      +'</div>';}).join('');
   } else { h+='<div style="color:var(--dm);font-size:13px;padding:6px 0">Bu gün sipariş yok</div>'; }
   h+='<div style="font-weight:700;font-size:13px;margin:14px 0 6px;border-top:1px solid var(--bd);padding-top:10px">🧾 Yeni Fiş Gir</div>';
   if(!window._qoRows.length){
