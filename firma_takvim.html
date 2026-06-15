@@ -138,7 +138,7 @@ table.rpt tr.t td{font-weight:700;background:var(--s2)}
     <select id="selF" onchange="onFirma()" style="font-weight:700;font-size:16px;border:none;background:transparent;color:var(--ac)"></select>
   </div>
   <div class="tabs">
-    <div class="tab on" onclick="setTab('ozet')">📊 Özet</div>
+    <div class="tab on" onclick="setTab('ozet')">🏠 Firma 360</div>
     <div class="tab" onclick="setTab('fiyat')">📦 Portföy</div>
     <div class="tab" onclick="setTab('takvim')">📅 Sipariş</div>
     <div class="tab" onclick="setTab('tahsilat')">💵 Tahsilat</div>
@@ -423,7 +423,7 @@ async function renderOzet(){
     sb.from('siparisler').select('id',{count:'exact',head:true}).eq('firma_id',fid).eq('is_deleted',false).in('durum',['bekleyen','uretimde','hazir','sevk_edildi']),
     sb.from('tahsilatlar').select('tarih,tutar,odeme_tipi').eq('firma_id',fid).eq('is_deleted',false).order('tarih',{ascending:false}).limit(1),
     sb.from('siparisler').select('id,tarih,toplam_kdv_dahil').eq('firma_id',fid).eq('is_deleted',false).neq('durum','iptal').gte('tarih',bas12).order('tarih',{ascending:false}),
-    sb.from('firmalar').select('resmi_unvan,vergi_no,vergi_dairesi').eq('id',fid).maybeSingle(),
+    sb.from('firmalar').select('resmi_unvan,vergi_no,vergi_dairesi,yetkili_kisi,telefon').eq('id',fid).maybeSingle(),
     sb.from('v_firma_pulse').select('*').eq('firma_id',fid).maybeSingle(),
     sb.from('firma_gorusmeleri').select('*').eq('firma_id',fid).order('gorusme_tarihi',{ascending:false}).order('olusturma',{ascending:false}).limit(5)
   ]);
@@ -471,6 +471,34 @@ async function renderOzet(){
   if(pv&&pv.aksiyon){ tasks=tasks.filter(function(t){return t.ico!=='☎';}); tasks.unshift({ico:'☎',o:0,clr:(Number(pv.siddet)>=4?'--rd':'--ac'),text:esc(pv.aksiyon)+' — '+esc(firmaAd)}); }
 
   var h='';
+  // === FIRMA 360 ÜST KATMAN (DALGA 1) — mevcut Özet içeriği altta korunur ===
+  var _yetk=(firmaV.yetkili_kisi||'').trim()||'—', _tel=(firmaV.telefon||'').trim()||'—', _vno=(firmaV.vergi_no||'').trim()||'—';
+  var _sonSip=g.son_siparis?trd(g.son_siparis):'—', _sonTah=(sonTah&&sonTah.tarih)?trd(sonTah.tarih):'—';
+  var _nm=new Date().getMonth(),_ny=new Date().getFullYear();
+  var _buAy=sip12.filter(function(s){var d=new Date(s.tarih+'T00:00:00');return d.getMonth()===_nm&&d.getFullYear()===_ny;}).length;
+  var _karHtml=(maliyetEksik>0)?'<span style="color:var(--rd);font-size:12px">\u26a0 maliyet eksik \u00b7 k\u00e2r g\u00fcvenilmez</span>':'<span style="font-size:12px">Br\u00fct k\u00e2r (KDV hari\u00e7): <b style="color:var('+(Number(g.toplam_kar||0)>=0?'--gn':'--rd')+')">'+TL(g.toplam_kar||0)+'</b> \u00b7 %'+marj.toFixed(1)+'</span>';
+  h+='<div class="card" style="border:2px solid var(--ac)">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
+      +'<div><div style="font-size:18px;font-weight:800">'+esc(firmaAd)+' <span style="font-size:11px;background:#E1F5EE;color:var(--gn);border-radius:12px;padding:2px 8px">aktif</span></div>'
+      +'<div style="font-size:12px;color:var(--dm);margin-top:2px">Firma 360</div></div>'
+      +'<div style="font-size:12px;color:var(--dm);text-align:right;line-height:1.6">\ud83d\udc64 '+esc(_yetk)+' \u00b7 \u260e '+esc(_tel)+'<br>VKN '+esc(_vno)+' \u00b7 son sip. '+_sonSip+' \u00b7 son tah. '+_sonTah+'</div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px">'
+      +'<div style="background:var(--s2);border-radius:10px;padding:10px"><div style="font-size:11px;color:var(--dm)">Net Bakiye</div><div style="font-size:18px;font-weight:800;color:var('+(kalan>0?'--rd':'--gn')+')">'+TL(kalan)+'</div></div>'
+      +'<div style="background:var(--s2);border-radius:10px;padding:10px"><div style="font-size:11px;color:var(--dm)">Bekleyen \u00c7ek</div><div style="font-size:18px;font-weight:800">'+AD(bekCek)+' adet</div></div>'
+      +'<div style="background:var(--s2);border-radius:10px;padding:10px"><div style="font-size:11px;color:var(--dm)">Geciken / A\u00e7\u0131k \u00d6deme</div><div style="font-size:18px;font-weight:800;color:var('+(kalan>0?'--rd':'--gn')+')">'+(kalan>0?TL(kalan):'0 \u20ba')+'</div></div>'
+      +'<div style="background:var(--s2);border-radius:10px;padding:10px"><div style="font-size:11px;color:var(--dm)">Bu Ay Sipari\u015f</div><div style="font-size:18px;font-weight:800">'+AD(_buAy)+'</div></div>'
+    +'</div>'
+    +'<div style="margin-top:8px">'+_karHtml+'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px">'
+      +'<button class="b s" onclick="openDay(tdy())">\u2795 Sipari\u015f</button>'
+      +'<button class="b s" onclick="fmOpenTahsilat()">\ud83d\udcb5 Tahsilat</button>'
+      +'<button class="b s" onclick="setTab(\'cek\')">\ud83e\uddfe \u00c7ek</button>'
+      +'<button class="b s" onclick="setTab(\'fiyat\')">\ud83c\udff7 Fiyat</button>'
+      +'<button class="b s" onclick="setTab(\'bakiye\')">\ud83d\udcc4 Ekstre</button>'
+      +'<button class="b s" onclick="setTab(\'rapor\')">\ud83d\udcc8 Rapor</button>'
+    +'</div>'
+  +'</div>';
   // 1) MÜŞTERİ NABZI — HERO (durum + sebep + tek aksiyon). Mantık değişmez; pulse'tan türetilir.
   var heroCls,badgeCls,badgeTxt,reason,actHtml;
   if(pv){
