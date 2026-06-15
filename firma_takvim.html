@@ -52,7 +52,7 @@ label{display:block;font-size:12px;color:var(--dm);margin:8px 0 4px}
 .tab:last-child{border-right:none} .tab.on{background:var(--ac);color:#fff}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:10px 0}
 .cal-h{text-align:center;font-size:11px;color:var(--dm);font-weight:700;padding:5px 0}
-.cal-d{background:var(--s);border:1px solid var(--bd);border-radius:8px;padding:5px;min-height:52px;cursor:pointer;transition:.15s}
+.cal-d{background:var(--s);border:1px solid var(--bd);border-radius:8px;padding:5px;min-height:60px;cursor:pointer;transition:.15s}
 .cal-d:hover{border-color:var(--ac)} .cal-d.empty{background:transparent;border:none;cursor:default}
 .cal-d.today{border-color:var(--ac);border-width:2px} .cal-d.has{background:#E8F0FB;border-color:#1E5BA8}
 .cal-d .dn{font-size:12px;font-weight:700} .cal-d .di{font-size:9px;color:var(--dm);margin-top:2px;line-height:1.2}
@@ -700,14 +700,18 @@ async function renderTakvim(){
   const bas=y+'-'+String(m+1).padStart(2,'0')+'-01';const son=new Date(y,m+1,0);const bit=y+'-'+String(m+1).padStart(2,'0')+'-'+String(son.getDate()).padStart(2,'0');
   const r=await sb.from('siparisler').select('id,tarih,toplam_kdv_dahil,durum').eq('firma_id',cF).eq('is_deleted',false).gte('tarih',bas).lte('tarih',bit);
   const sips=r.data||[];const dm={};let mc=0;
-  sips.forEach(s=>{const t=s.tarih;dm[t]=dm[t]||{n:0,c:0};dm[t].n++;dm[t].c+=+(s.toplam_kdv_dahil||0);mc+=+(s.toplam_kdv_dahil||0);});
+  sips.forEach(s=>{const t=s.tarih;dm[t]=dm[t]||{n:0,c:0,a:0};dm[t].n++;dm[t].c+=+(s.toplam_kdv_dahil||0);mc+=+(s.toplam_kdv_dahil||0);});
+  const _ids=sips.map(s=>s.id);
+  if(_ids.length){ const _sd={}; sips.forEach(s=>_sd[s.id]=s.tarih);
+    const _rk=await sb.from('siparis_kalemleri').select('siparis_id,adet').in('siparis_id',_ids).eq('is_deleted',false);
+    (_rk.data||[]).forEach(k=>{const t=_sd[k.siparis_id]; if(t&&dm[t]) dm[t].a+=(+k.adet||0);}); }
   checkPW(y,m+1);const td=new Date().toISOString().slice(0,10);
   let h='<div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px"><button class="b s" onclick="chMo(-1)">←</button><strong>'+AY[m]+' '+y+'</strong><button class="b s" onclick="chMo(1)">→</button></div>';
   h+='<div class="cal">'+GN.map(g=>'<div class="cal-h">'+g+'</div>').join('');
   let bg=new Date(y,m,1).getDay()-1;if(bg<0)bg=6;
   for(let i=0;i<bg;i++)h+='<div class="cal-d empty"></div>';
   for(let d=1;d<=son.getDate();d++){const t=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');const v=dm[t];
-    h+='<div class="cal-d'+(t===td?' today':'')+(v?' has':'')+'" onclick="openDay(\''+t+'\')"><div class="dn">'+d+'</div>'+(v?'<div class="di"><b>'+v.n+'</b><br>'+TL(v.c)+'</div>':'')+'</div>';}
+    h+='<div class="cal-d'+(t===td?' today':'')+(v?' has':'')+'" onclick="openDay(\''+t+'\')"><div class="dn">'+d+'</div>'+(v?'<div class="di"><b>'+v.n+'</b> sip · '+v.a+' adet<br>'+TL(v.c)+'</div>':'')+'</div>';}
   h+='</div><div class="card" style="text-align:center">'+(sips.length===0?'<span style="color:var(--dm)">'+AY[m]+' '+y+' · bu ay sipariş yok</span>':'<b>'+AY[m]+'</b> · '+sips.length+' sipariş · '+TL(mc))+'</div>';c.innerHTML=h;
 }
 function chMo(d){curMo=new Date(curMo.getFullYear(),curMo.getMonth()+d,1);render();}
