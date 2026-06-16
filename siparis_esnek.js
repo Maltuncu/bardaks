@@ -1,12 +1,15 @@
-/* siparis_esnek.js — Sipariş girişinde ürün ekle/çıkar override
-   netkar_banka.js'ten sonra yüklenir, openYeniSiparis/ysLoadUrunler'i değiştirir.
-   DB zaten urun_id nullable → serbest ürün destekleniyor. */
+/* siparis_esnek.js — Sipariş girişi: son sipariş yükle + ürün ekle/çıkar + seçili liste (UI override)
+   netkar_banka.js'ten sonra yüklenir, ysLoadUrunler/ysRenderSatirlar'ı değiştirir.
+   Salt UI/READ: DB yazma yok, kaydetme mantığı yok, KDV yok. */
 (function(){
   'use strict';
+  function _esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function _ad(n){return (Number(n)||0).toLocaleString('tr-TR');}
+  function _tl(n){return (typeof TL==='function')?TL(n):((Number(n)||0).toLocaleString('tr-TR')+' ₺');}
+  function _trd(t){try{return new Date(t).toLocaleDateString('tr-TR');}catch(e){return String(t||'');}}
   function waitApp(cb,t){ t=t||80; if(typeof openYeniSiparis==='function'&&typeof URUNLER!=='undefined') cb(); else if(t>0) setTimeout(function(){waitApp(cb,t-1);},200); }
   waitApp(function(){
 
-    // ── ysLoadUrunler override: render + ekle/sil ──
     window.ysLoadUrunler = function(){
       var fid = document.getElementById('ysFirma').value;
       var fiyatlar = (typeof FIYATLAR!=='undefined'?FIYATLAR:[]).filter(function(p){return p.firma_id===fid;});
@@ -14,21 +17,66 @@
       window.ysSatirlar = fiyatlar.map(function(p){
         return {urun_id:p.urun_id, ad:p.urun_ad, fiyat:p.birim_fiyat_kdv_haric, kdv:p.kdv_orani, adet:0};
       }).concat(manuals);
+      window._ysSon = null;
       ysRenderSatirlar();
+      ysFetchSon(fid);
+    };
+
+    window.ysFetchSon = function(fid){
+      if(typeof sb==='undefined' || !fid) return;
+      sb.from('siparisler').select('id,tarih').eq('firma_id',fid).eq('is_deleted',false).neq('durum','iptal').order('tarih',{ascending:false}).limit(1).then(function(rs){
+        var s=rs&&rs.data&&rs.data[0]; if(!s) return;
+        sb.from('siparis_kalemleri').select('urun_id,urun_ad,adet').eq('siparis_id',s.id).eq('is_deleted',false).then(function(rk){
+          window._ysSon={tarih:s.tarih, kalemler:(rk&&rk.data)||[]};
+          ysRenderSatirlar();
+        });
+      });
+    };
+
+    window.ysSiparisYukle = function(){
+      if(!window._ysSon) return;
+      var miss=0;
+      (window._ysSon.kalemler||[]).forEach(function(k){
+        var found=false;
+        (window.ysSatirlar||[]).forEach(function(s){ if(s.urun_id && s.urun_id===k.urun_id){ s.adet=(Number(k.adet)||0); found=true; } });
+        if(!found) miss++;
+      });
+      ysRenderSatirlar();
+      if(typeof ysHesap==='function') ysHesap();
+      if(miss) alert(miss+' kalem güncel katalogda yok, atlandı');
     };
 
     window.ysRenderSatirlar = function(){
       var c=document.getElementById('ysUrunler'); if(!c) return;
-      var rows=window.ysSatirlar;
-      c.innerHTML = '<label style="display:flex;justify-content:space-between;align-items:center">Ürünler <button class="btn btn-sec btn-sm" onclick="ysEklePanel()" style="font-size:12px">➕ Ürün Ekle</button></label>'
-        + (rows.length ? rows.map(function(s,i){
-          return '<div class="flex-between" style="padding:7px 0;border-bottom:1px solid var(--border)">'
-            +'<div style="flex:1"><div style="font-size:14px">'+(s.ad||'?')+(s._manual?' <span style="font-size:10px;color:var(--accent)">yeni</span>':'')+'</div>'
-            +'<div style="font-size:12px;color:var(--text-dim)">'+(typeof TL==='function'?TL(s.fiyat):s.fiyat)+'/br · KDV %'+(s.kdv||1)+'</div></div>'
-            +'<input type="number" min="0" style="width:66px;text-align:center" value="'+(s.adet||0)+'" oninput="ysSatirlar['+i+'].adet=Number(this.value)||0;ysHesap()">'
-            +'<button onclick="ysSilSatir('+i+')" style="margin-left:4px;background:none;border:none;color:#e05c5c;font-size:18px;cursor:pointer;padding:2px 6px">✕</button></div>';
-        }).join('') : '<div style="padding:12px;color:var(--text-dim);text-align:center">Ürün yok. ➕ ile ekle.</div>');
-      ysHesap();
+      var rows=window.ysSatirlar||[];
+      var h='';
+      if(window._ysSon){
+        var sln=(window._ysSon.kalemler||[]).map(function(k){return _esc(k.urun_ad||'?')+' ×'+_ad(k.adet);}).join(' · ')||'kalem yok';
+        h+='<div style="border:1px solid var(--accent,#d4a04f);border-radius:10px;padding:10px;margin-bottom:10px">'
+          +'<div style="font-size:12px;color:var(--text-dim)">Son sipariş · '+_trd(window._ysSon.tarih)+'</div>'
+          +'<div style="font-size:13px;margin:4px 0;line-height:1.5">'+sln+'</div>'
+          +'<button class="btn btn-sec btn-sm" style="width:100%;min-height:44px" onclick="ysSiparisYukle()">Siparişi Yükle</button></div>';
+      }
+      h+='<label style="display:flex;justify-content:space-between;align-items:center">Ürünler <button class="btn btn-sec btn-sm" onclick="ysEklePanel()" style="font-size:12px">➕ Ürün Ekle</button></label>';
+      h+='<div id="ysSecili"></div>';
+      h+=(rows.length ? rows.map(function(s,i){
+        return '<div class="flex-between" style="padding:8px 0;border-bottom:1px solid var(--border)">'
+          +'<div style="flex:1;min-width:0"><div style="font-size:14px">'+_esc(s.ad||'?')+(s._manual?' <span style="font-size:10px;color:var(--accent)">yeni</span>':'')+'</div>'
+          +'<div style="font-size:12px;color:var(--text-dim)">'+_tl(s.fiyat)+'/br · KDV %'+(s.kdv||1)+'</div></div>'
+          +'<input type="number" min="0" inputmode="numeric" style="width:64px;min-height:56px;text-align:center;font-size:16px" value="'+(s.adet||0)+'" oninput="window.ysSatirlar['+i+'].adet=Number(this.value)||0;ysUpdateSecili();ysHesap()">'
+          +'<button onclick="ysSilSatir('+i+')" style="margin-left:4px;background:none;border:none;color:#e05c5c;font-size:18px;cursor:pointer;padding:6px 8px;min-height:44px">✕</button></div>';
+      }).join('') : '<div style="padding:12px;color:var(--text-dim);text-align:center">Ürün yok. ➕ ile ekle.</div>');
+      c.innerHTML=h;
+      ysUpdateSecili();
+      if(typeof ysHesap==='function') ysHesap();
+    };
+
+    window.ysUpdateSecili = function(){
+      var el=document.getElementById('ysSecili'); if(!el) return;
+      var sel=(window.ysSatirlar||[]).filter(function(s){return (s.adet||0)>0;});
+      el.innerHTML = sel.length
+        ? '<div style="background:var(--surface2,#1f232c);border-radius:8px;padding:8px;margin-bottom:8px;font-size:12px"><span style="color:var(--text-dim)">Seçili: </span>'+sel.map(function(s){return _esc(s.ad)+' ×'+_ad(s.adet);}).join(' · ')+'</div>'
+        : '';
     };
 
     window.ysSilSatir = function(i){
@@ -36,7 +84,6 @@
       ysRenderSatirlar();
     };
 
-    // ── Ürün ekleme paneli ──
     window.ysEklePanel = function(){
       if(document.getElementById('ysAddPnl')) return;
       var urunOpts = (typeof URUNLER!=='undefined'?URUNLER:[]).filter(function(u){return u.aktif!==false;}).map(function(u){
@@ -79,7 +126,6 @@
       ysRenderSatirlar();
     };
 
-    // ── Rapor FAB butonu ──
     if(typeof CURRENT!=='undefined' && CURRENT && (CURRENT.rol==='admin'||CURRENT.rol==='mudur')){
       var rb=document.createElement('a');
       rb.href='rapor.html';
