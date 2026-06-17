@@ -851,10 +851,12 @@ async function renderFiyat(){
   const c=document.getElementById('content');
   const firmaAd=(F.find(f=>f.id===cF)||{}).ad||'';
   const fiyatlar=FY.filter(p=>p.firma_id===cF).sort((a,b)=>(a.urun_ad||'').localeCompare(b.urun_ad||'','tr'));
-  // Fiyat değişim geçmişi
-  const rl=await sb.from('firma_urun_log').select('*').eq('firma_id',cF).order('olusturma',{ascending:false}).limit(100);
-  const logs=rl.data||[];
-  const logMap={};logs.forEach(l=>{const uid=l.urun_id||'?';logMap[uid]=logMap[uid]||[];logMap[uid].push(l);});
+  // [ZAM-1] Zam geçmişi: firma_urun_fiyat versiyonlarından türetilir (gerçek satış fiyatı değişimi).
+  // firma_urun_log artık kullanılmıyor: oradaki kayıtlar çoğunlukla cikarildi/eklendi (yeni_fiyat=null) → yanlış -%100 gösteriyordu.
+  const rv=await sb.from('firma_urun_fiyat').select('urun_id,birim_fiyat_kdv_haric,gecerlilik_baslangic').eq('firma_id',cF).eq('is_deleted',false).order('gecerlilik_baslangic',{ascending:true});
+  const _vers={};(rv.data||[]).forEach(v=>{const uid=v.urun_id;(_vers[uid]=_vers[uid]||[]).push(v);});
+  const zamMap={};
+  Object.keys(_vers).forEach(uid=>{let prev=null;_vers[uid].forEach(v=>{const fy=+v.birim_fiyat_kdv_haric||0;if(prev!=null&&Math.abs(fy-prev)>0.001){const pct=prev>0?((fy-prev)/prev*100):0;(zamMap[uid]=zamMap[uid]||[]).push({tarih:v.gecerlilik_baslangic,eski:prev,yeni:fy,pct:pct});}prev=fy;});});
   // Son sipariş + toplam satış (firma kapsamlı, is_deleted=false) — YENİ TABLO YOK
   const sonMap={},satisMap={};
   const rs=await sb.from('siparisler').select('id,tarih').eq('firma_id',cF).eq('is_deleted',false).neq('durum','iptal');
@@ -893,11 +895,16 @@ async function renderFiyat(){
     +'<div><div style="font-size:11px;color:var(--dm)">En Çok Satan</div><b style="font-size:14px">'+(enCok?esc(enCok.p.urun_ad)+' <span style="color:var(--dm);font-weight:400">('+AD(enCok.topAdet)+')</span>':'—')+'</b></div>'
     +'<div><div style="font-size:11px;color:var(--dm)">En Kârlı</div><b style="font-size:14px;color:var(--gn)">'+(enKar?esc(enKar.p.urun_ad)+' <span style="color:var(--dm);font-weight:400">('+TL(enKar.net)+')</span>':'—')+'</b></div>'
     +'</div></div>';
+  // [ZAM-1] Firma geneli Zam Geçmişi özeti (read-only, versiyonlardan türetildi)
+  const zamRows=rows.filter(r=>(zamMap[r.p.urun_id]||[]).length).map(r=>{const zs=zamMap[r.p.urun_id];const ilk=zs[0].eski,son=zs[zs.length-1].yeni;const pct=ilk>0?((son-ilk)/ilk*100):0;return {ad:r.p.urun_ad,ilk:ilk,son:son,pct:pct,tar:zs[zs.length-1].tarih,n:zs.length};}).sort((a,b)=>b.pct-a.pct);
+  if(zamRows.length){h+='<div class="card"><div style="margin-bottom:8px"><b>📈 Zam Geçmişi ('+zamRows.length+' ürün)</b> <span style="font-size:11px;color:var(--dm)">satış fiyatı · KDV hariç · ilk→son</span></div>';
+    zamRows.forEach(z=>{h+='<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:5px 0;border-bottom:1px solid var(--bd)"><span style="min-width:0">'+esc(z.ad)+' <span style="font-size:11px;color:var(--dm)">'+trd(z.tar)+(z.n>1?(' · '+z.n+' kez'):'')+'</span></span><span style="white-space:nowrap">'+TL(z.ilk)+' → <b>'+TL(z.son)+'</b> <span class="'+(z.pct>0?'zam':'ind')+'">('+PCT(z.pct)+')</span></span></div>';});
+    h+='</div>';}
   h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><b>📦 Portföy ('+aktifSay+')</b><div style="display:flex;gap:6px;flex-wrap:wrap">'
     +'<button class="b s" style="font-size:12px;padding:6px 10px" onclick="portfoyYazdir()">📄 Yazdır</button>'
     +'<button class="b s" style="font-size:12px;padding:6px 10px" onclick="openTeklif()">📄 Teklif</button>'
     +'<button class="b s" style="font-size:12px;padding:6px 10px" onclick="showAddPrice()">➕ Yeni Ürün</button></div></div>';
-  rows.forEach(r=>{const p=r.p,uid=p.urun_id,hist=logMap[uid]||[];
+  rows.forEach(r=>{const p=r.p,uid=p.urun_id,zh=zamMap[uid]||[];
     const karHtml=r.maliyet>0
       ?'Maliyet (KDV hariç): '+TL(r.maliyet)+' · <b style="color:var('+(r.net>=0?'--gn':'--rd')+')">Birim net kâr: '+TL(r.net)+'</b> (marj %'+r.marj.toFixed(1)+')'
       :'<span style="color:var(--rd)">⚠️ Maliyet girilmemiş — birim net kâr hesaplanamıyor</span>';
@@ -909,8 +916,8 @@ async function renderFiyat(){
       +'<div style="display:flex;align-items:center;gap:8px"><div style="text-align:right"><div style="font-size:10px;color:var(--dm)">Satış (KDV hariç)</div><b style="color:var(--ac);font-size:16px">'+TL(r.satis)+'</b></div>'
       +'<button class="b s" style="padding:5px 10px;font-size:12px" onclick="editPrice(\''+p.id+'\',\''+uid+'\',\''+String(p.urun_ad).replace(/'/g,"\\'")+'\','+r.satis+','+r.kdv+')">✏️</button>'
       +'<button class="b s" style="padding:5px 10px;font-size:12px;color:var(--rd)" onclick="urunKaldir(\''+p.id+'\',\''+uid+'\',\''+String(p.urun_ad).replace(/'/g,"\\'")+'\')">Kaldır</button></div></div>';
-    if(hist.length){h+='<div class="fl-hist">';
-      hist.slice(0,5).forEach(l=>{const tarih=l.olusturma?new Date(l.olusturma).toLocaleDateString('tr-TR'):'?';const eski=+l.eski_fiyat||0,yeni=+l.yeni_fiyat||0;const fark=eski>0?((yeni-eski)/eski*100):0;const cls=fark>0?'zam':'ind';h+='<div style="margin:2px 0">'+tarih+': '+TL(eski)+' → '+TL(yeni)+' <span class="'+cls+'">('+PCT(fark)+')</span></div>';});
+    if(zh.length){h+='<div class="fl-hist">';
+      zh.slice().reverse().slice(0,6).forEach(z=>{const cls=z.pct>0?'zam':'ind';h+='<div style="margin:2px 0">'+trd(z.tarih)+': '+TL(z.eski)+' → '+TL(z.yeni)+' <span class="'+cls+'">('+PCT(z.pct)+')</span></div>';});
       h+='</div>';}
   });
   h+='<div id="addPriceArea"></div></div>';
