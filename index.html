@@ -777,7 +777,7 @@ async function sendNot(sid){
   openSohbet(sid);
 }
 // ===== PRODUCTION PULSE (PP-2) — ürün-bazlı üretim merkezi; Liste görünümü korunur =====
-let uretimGorunum = 'pulse';
+let uretimGorunum = 'liste';
 let _uuLastBatch = null;
 let _uuConfirm = null;
 let _uuBusy = false;
@@ -854,7 +854,7 @@ async function renderUretim(){
   el.innerHTML = h;
 }
 function uretimToggleHtml(){
-  return '<div class="pill-tabs" style="margin:0"><div class="pill '+(uretimGorunum==='pulse'?'active':'')+'" style="min-height:44px;display:flex;align-items:center" onclick="uretimGorunum=\'pulse\';renderUretim()">📦 Ürün</div><div class="pill '+(uretimGorunum==='liste'?'active':'')+'" style="min-height:44px;display:flex;align-items:center" onclick="uretimGorunum=\'liste\';renderUretim()">📋 Liste</div></div>';
+  return '<div class="pill-tabs" style="margin:0"><div class="pill '+(uretimGorunum==='pulse'?'active':'')+'" style="min-height:44px;display:flex;align-items:center" onclick="uretimGorunum=\'pulse\';renderUretim()">📦 Ürün</div><div class="pill '+(uretimGorunum==='liste'?'active':'')+'" style="min-height:44px;display:flex;align-items:center" onclick="uretimGorunum=\'liste\';renderUretim()">📋 Kanban</div></div>';
 }
 function renderUretimPulse(el, siparisler, kalemler){
   const bugunStr = today();
