@@ -370,7 +370,7 @@ function closeModal(){ document.getElementById('modalBg').classList.remove('open
 function toast(title, body){
   const t = document.createElement('div');
   t.className='toast';
-  t.innerHTML = '<div class="toast-title">'+title+'</div>'+(body?'<div class="toast-body">'+body+'</div>':'');
+  t.innerHTML = '<div class="toast-title">'+escapeHtml(title)+'</div>'+(body?'<div class="toast-body">'+escapeHtml(body)+'</div>':'');
   document.getElementById('toasts').appendChild(t);
   setTimeout(function(){ t.style.opacity='0'; t.style.transform='translateX(120%)'; t.style.transition='.3s'; setTimeout(function(){t.remove();},300); }, 4000);
 }
@@ -765,7 +765,7 @@ async function kilitAc(sid){
 async function openSohbet(sid){
   const rn = await sb.from('siparis_notlari').select('*').eq('siparis_id',sid).order('olusturma');
   await sb.from('siparisler').update({okunmamis_not:false}).eq('id',sid);
-  const msgs = (rn.data||[]).map(function(n){return '<div style="margin-bottom:10px; '+(n.yazan===CURRENT.ad_soyad?'text-align:right':'')+'"><div style="display:inline-block; max-width:80%; background:'+(n.yazan===CURRENT.ad_soyad?'var(--accent-soft)':'var(--surface2)')+'; padding:9px 13px; border-radius:12px; text-align:left"><div style="font-size:11px; color:var(--text-dim); margin-bottom:2px">'+n.yazan+' · '+new Date(n.olusturma).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})+'</div>'+n.mesaj+'</div></div>';}).join('') || '<div class="empty">Henüz mesaj yok</div>';
+  const msgs = (rn.data||[]).map(function(n){return '<div style="margin-bottom:10px; '+(n.yazan===CURRENT.ad_soyad?'text-align:right':'')+'"><div style="display:inline-block; max-width:80%; background:'+(n.yazan===CURRENT.ad_soyad?'var(--accent-soft)':'var(--surface2)')+'; padding:9px 13px; border-radius:12px; text-align:left"><div style="font-size:11px; color:var(--text-dim); margin-bottom:2px">'+escapeHtml(n.yazan)+' · '+new Date(n.olusturma).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})+'</div>'+escapeHtml(n.mesaj)+'</div></div>';}).join('') || '<div class="empty">Henüz mesaj yok</div>';
   openModal('<div class="modal-head"><h3>💬 Sipariş Sohbeti</h3><button class="modal-close" onclick="closeModal()">×</button></div><div id="sohbetMsgs" style="max-height:300px; overflow-y:auto; margin-bottom:14px">'+msgs+'</div><div class="row"><input id="sohbetInput" placeholder="Mesaj yaz..." style="flex:4" onkeydown="if(event.key===\'Enter\')sendNot(\''+sid+'\')"><button class="btn" style="flex:1" onclick="sendNot(\''+sid+'\')">Gönder</button></div>');
   const m=document.getElementById('sohbetMsgs'); m.scrollTop=m.scrollHeight;
 }
@@ -1236,7 +1236,7 @@ async function araOzet(){
   const r=await query;
   const list=document.getElementById('ozetList');
   if(!r.data||!r.data.length){ list.innerHTML='<div class="empty"><div class="empty-ico">📋</div>'+(q?'Sonuç bulunamadı':'Henüz özet yok')+'</div>'; return; }
-  list.innerHTML=r.data.map(function(o){return '<div class="card"><div class="flex-between mb"><strong>'+trDate(o.tarih)+'</strong><span class="tag tag-dim">'+o.yazan+'</span></div><div style="white-space:pre-wrap;font-size:14px">'+highlight(o.ozet,q)+'</div></div>';}).join('');
+  list.innerHTML=r.data.map(function(o){return '<div class="card"><div class="flex-between mb"><strong>'+trDate(o.tarih)+'</strong><span class="tag tag-dim">'+escapeHtml(o.yazan)+'</span></div><div style="white-space:pre-wrap;font-size:14px">'+highlight(escapeHtml(o.ozet),q)+'</div></div>';}).join('');
 }
 function highlight(text,q){
   if(!q) return text;
@@ -1508,7 +1508,7 @@ function appendSohbetMesaj(m, skipDate){
   wrap.className = 'chat-msg ' + (benim?'mine':'other');
   const saat = new Date(m.olusturma).toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
   const silBtn = benim || CURRENT.rol==='admin' ? ' · <a href="#" onclick="silSohbetMesaj(\''+m.id+'\');return false" style="color:var(--text-dim)">sil</a>' : '';
-  const rolEtiket = benim ? '' : '<strong>'+m.yazan_ad+'</strong> · ';
+  const rolEtiket = benim ? '' : '<strong>'+escapeHtml(m.yazan_ad)+'</strong> · ';
   wrap.innerHTML = '<div class="chat-bubble">'+escapeHtml(m.mesaj)+'</div><div class="chat-meta">'+rolEtiket+saat+silBtn+'</div>';
   mc.appendChild(wrap);
   if(!skipDate) scrollSohbetBottom();
@@ -1520,7 +1520,7 @@ function scrollSohbetBottom(){
 }
 
 function escapeHtml(s){
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 async function gonderSohbet(){
