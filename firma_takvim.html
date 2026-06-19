@@ -1166,9 +1166,9 @@ async function qoRender(tarih){
         +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px">'+esc(s.siparis_no||'\u2014')+' <span style="font-size:11px;color:var(--dm)">('+esc(s.durum||'')+')</span></span><b>'+TL(s.toplam_kdv_dahil)+'</b></div>'
         +'<div style="margin-top:4px">'+_ln+'</div>'
         +'<div style="text-align:right;font-size:11px;color:var(--dm);margin-top:2px">toplam '+AD(_ta)+' adet</div>'
-      +'</div>';}).join('');
+      +'</div>';}).join('')+'<div style="font-size:11px;color:var(--dm);margin-top:6px;padding-top:4px;border-top:1px dashed var(--bd)">💡 Düzeltmek için: Siparişler → Aç → ✏️ Düzenle</div>';
   } else { h+='<div style="color:var(--dm);font-size:13px;padding:6px 0">Bu gün sipariş yok</div>'; }
-  h+='<div style="font-weight:700;font-size:13px;margin:14px 0 6px;border-top:1px solid var(--bd);padding-top:10px">🧾 Yeni Fiş Gir</div>';
+  h+='<div style="font-weight:700;font-size:13px;margin:14px 0 6px;border-top:1px solid var(--bd);padding-top:10px">➕ YENİ Sipariş — mevcut siparişi değiştirmez</div>';
   if(!window._qoRows.length){
     h+='<div style="color:var(--rd);font-size:13px">Bu firmada aktif ürün/fiyat yok. Önce 📦 Portföy\'den ürün/fiyat girin.</div>'
       +'<div style="display:flex;gap:6px;margin-top:10px"><button class="b s" style="flex:1" onclick="setTab(\'fiyat\')">📦 Portföy\'e Git</button><button class="b s" style="flex:1" onclick="closeMo();render()">Kapat</button></div>';
@@ -1205,6 +1205,13 @@ async function qoSave(){
   var dolu=(window._qoRows||[]).filter(function(s){return s.adet>0;});
   if(!dolu.length){ alert('En az bir ürüne adet gir'); return; }
   if(dolu.some(function(s){return !s.urun_id;})){ alert('Yalnızca firma kataloğundaki ürünler eklenebilir'); return; }
+  // [DUP-GUARD] aynı firma+gün aktif sipariş varsa soft uyarı (D-native, fail-open, hard-block yok)
+  try{
+    var _dupq=await sb.from('siparisler').select('id').eq('firma_id',cF).eq('tarih',window._qoDay).eq('is_deleted',false).neq('durum','iptal');
+    if(_dupq.data && _dupq.data.length){
+      if(!confirm('⚠ Bu firmaya bu tarih için zaten sipariş bulunmaktadır.\n\nMevcut siparişi düzeltmek istiyorsan: Siparişler → Aç → ✏ Düzenle\n\nAYRI yeni sipariş oluşturmak istiyor musun?')){ return; }
+    }
+  }catch(e){ /* fail-open: okuma hatası kaydı engellemez */ }
   var btn=document.getElementById('qoSaveBtn'); if(btn){btn.disabled=true;btn.textContent='Kaydediliyor...';}
   var who='Firma Yönetim'; try{ var u=await sb.auth.getUser(); if(u.data&&u.data.user&&u.data.user.email) who=u.data.user.email; }catch(e){}
   // siparisler insert — index.html kaydetSiparis BİREBİR; toplam/kâr/cari ELLE YAZILMAZ (trigger hesaplar)
