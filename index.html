@@ -446,6 +446,7 @@ const durumTag = d => ({bekleyen:'tag-dim',uretimde:'tag-yellow',hazir:'tag-blue
 
 // ===== KOMUTA MERKEZİ (HOME-COCKPIT-1) — yalnız mevcut view/tablo, salt okuma =====
 async function renderHome(){
+  // [KOMUTA-V2] 6 bölüm: Acil / Bugün Yapılacaklar / Tahsilat / Operasyon / Kârlılık / Finans Özeti
   const el = document.getElementById('page-home');
   if(!el) return;
   el.innerHTML = '<div class="loading">Komuta Merkezi yükleniyor...</div>';
@@ -454,10 +455,6 @@ async function renderHome(){
   const ayBas = new Date(Y, now.getMonth(), 1).toISOString().slice(0,10);
   const ayAd = now.toLocaleDateString('tr-TR',{month:'long'});
   const num = function(x){ return Number(x||0); };
-  const kpi = function(label,val,col){ return '<div class="stat"><div class="stat-label">'+label+'</div><div class="stat-value" style="color:var('+col+')">'+val+'</div></div>'; };
-  const card = function(title,body){ return '<div class="card"><div class="card-title">'+title+'</div>'+body+'</div>'; };
-  const emptyBox = function(ico,txt){ return '<div class="hm-empty"><span class="ico">'+ico+'</span>'+txt+'</div>'; };
-  const row = function(name,sub,val,valCol,badge){ return '<div class="hm-row"><div class="hm-main"><div class="hm-name">'+escapeHtml(name||'—')+(badge?' '+badge:'')+'</div>'+(sub?'<div class="hm-sub">'+escapeHtml(sub)+'</div>':'')+'</div><div class="hm-val" style="color:var('+(valCol||'--text')+')">'+(val||'')+'</div></div>'; };
   let r;
   try {
     r = await Promise.all([
@@ -468,10 +465,10 @@ async function renderHome(){
       sb.from('tahsilatlar').select('id',{count:'exact',head:true}).eq('odeme_tipi','cek').eq('cek_durumu','beklemede').eq('is_deleted',false),
       sb.from('v_firma_pulse').select('*'),
       sb.from('hesap_bakiye').select('bakiye'),
-      sb.from('siparisler').select('id,tarih,teslim_tarihi,durum').in('durum',['bekleyen','uretimde','hazir']).eq('is_deleted',false)
+      sb.from('siparisler').select('id,firma_id,tarih,teslim_tarihi,durum').in('durum',['bekleyen','uretimde','hazir']).eq('is_deleted',false)
     ]);
   } catch(e){
-    el.innerHTML = '<div class="hm-empty"><span class="ico">⚠️</span>Komuta Merkezi yüklenemedi<div style="font-size:12px;margin-top:6px">'+escapeHtml(String((e&&e.message)||e))+'</div></div>';
+    el.innerHTML = '<div class="hm-empty"><span class="ico">!</span>Komuta Merkezi yüklenemedi<div style="font-size:12px;margin-top:6px">'+escapeHtml(String((e&&e.message)||e))+'</div></div>';
     return;
   }
   const cari=r[0].data||[], gecmis=r[1].data||[], ayOzet=r[2].data||[], ayTahs=r[3].data||[];
@@ -480,53 +477,97 @@ async function renderHome(){
   const hesaplar = (r[6]&&r[6].data)||[];
   const aktifSips = (r[7]&&r[7].data)||[];
 
-  // ---- BÖLÜM 1: ŞİRKET DURUMU (4 KPI)
+  // ---- türevler (yalnız mevcut veriden, yeni sorgu yok) ----
   const acikBakiye = cari.reduce(function(s,x){return s+num(x.kalan_bakiye);},0) + gecmis.reduce(function(s,x){return s+num(x.kalan_bakiye);},0);
   const ayS = ayOzet.reduce(function(s,x){return s+num(x.toplam_dahil);},0);
   const ayK = ayOzet.reduce(function(s,x){return s+num(x.net_kar);},0);
   const ayT = ayTahs.reduce(function(s,x){return s+num(x.tutar);},0);
-
   const nakit = hesaplar.reduce(function(s,x){return s+num(x.bakiye);},0);
-  let h = '<h1 class="page-title">Komuta Merkezi</h1><div class="page-desc">'+escapeHtml((CURRENT.ad_soyad||'').split(' ')[0])+' · '+ayAd+' '+Y+'</div>';
-  // ---- BÖLÜM 1: FİNANS ŞERİDİ [DASH-V3] — değer hesapları değişmedi, yalnız sunum inceldi
-  h += '<div class="card" style="padding:10px 14px;margin-bottom:14px"><div style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:baseline">'
-    + '<span style="font-size:13px;color:var(--text-dim)">Açık Bakiye <b style="font-size:17px;color:var('+(acikBakiye>0?'--red':'--text')+')">'+TL(acikBakiye)+'</b></span>'
-    + '<span style="font-size:12px;color:var(--text-dim)">Nakit <b style="font-size:14px;color:var(--text)">'+TL(nakit)+'</b></span>'
-    + '<span style="font-size:12px;color:var(--text-dim)">'+ayAd+' Satış <b style="color:var(--text)">'+TL(ayS)+'</b></span>'
-    + '<span style="font-size:12px;color:var(--text-dim)">Tahsilat <b style="color:var(--text)">'+TL(ayT)+'</b></span>'
-    + '<span style="font-size:12px;color:var(--text-dim)">Kâr <b>'+TL(ayK)+'</b> <span class="tag tag-yellow" style="font-size:10px">tahmini</span></span>'
+  const bugunStr = today();
+  const FIRMS = (typeof FIRMALAR!=='undefined'?FIRMALAR:[]);
+  const firmaAdOf = function(fid){ var c=cari.find(function(x){return x.firma_id===fid;}); if(c) return c.firma_ad; var f=FIRMS.find(function(x){return x.id===fid;}); return f?f.ad:'—'; };
+  // maliyet / marj
+  const maliyetMap = {}; (typeof URUNLER!=='undefined'?URUNLER:[]).forEach(function(u){ maliyetMap[u.id]=num(u.birim_maliyet); });
+  const eksikMaliyet = (typeof URUNLER!=='undefined'?URUNLER:[]).filter(function(u){return u.satis_urunu!==false && !num(u.birim_maliyet);}).length;
+  const negSet={}; (typeof FIYATLAR!=='undefined'?FIYATLAR:[]).forEach(function(p){ var m=maliyetMap[p.urun_id]||0; if(m>0 && num(p.birim_fiyat_kdv_haric) < m) negSet[p.urun_id]=1; });
+  const negatifMarj = Object.keys(negSet).length;
+  const karGuvenilir = (eksikMaliyet===0);
+  // operasyon
+  let opTeslim=0, opGeciken=0, opUretimde=0; const gecikenList=[];
+  aktifSips.forEach(function(s){ const t=(s.teslim_tarihi||s.tarih); if(t<bugunStr){ opGeciken++; gecikenList.push(s);} else if(t===bugunStr) opTeslim++; if(s.durum==='uretimde') opUretimde++; });
+  // pulse
+  const kritikCek = pulse.filter(function(x){return x.risk_sinif==='kritik_cek';}).sort(function(a,b){return num(b.oncelik_skoru)-num(a.oncelik_skoru);});
+  const yapilacak = pulse.filter(function(x){return x.aksiyon && num(x.siddet)>=2 && x.risk_sinif!=='kritik_cek';}).sort(function(a,b){return num(b.oncelik_skoru)-num(a.oncelik_skoru);}).slice(0,5);
+  const odemeRisk = pulse.filter(function(x){return x.risk_sinif==='odeme';}).sort(function(a,b){return num(b.acik_bakiye)-num(a.acik_bakiye);}).slice(0,4);
+
+  // ---- sade görsel yardımcılar (emoji'siz, seviye=renk) ----
+  const sevColor = {kritik:'--red', uyari:'--accent', bilgi:'--text-dim', ok:'--green'};
+  const sect = function(title, sev, bodyHtml, cta){
+    return '<div class="card" style="border-left:3px solid var('+(sevColor[sev]||'--border')+')">'
+      + '<div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>'+escapeHtml(title)+'</span>'+(cta||'')+'</div>'
+      + bodyHtml + '</div>';
+  };
+  const line = function(name, sub, val, col){
+    return '<div class="hm-row"><div class="hm-main"><div class="hm-name">'+escapeHtml(name||'—')+'</div>'+(sub?'<div class="hm-sub">'+escapeHtml(sub)+'</div>':'')+'</div>'+(val?'<div class="hm-val" style="color:var('+(col||'--text')+')">'+val+'</div>':'')+'</div>';
+  };
+  const ctaBtn = function(label, onclick){ return '<button class="btn btn-sec btn-sm" onclick="'+onclick+'">'+escapeHtml(label)+'</button>'; };
+  const okBox = function(txt){ return '<div class="hm-empty"><span class="ico">✓</span>'+escapeHtml(txt)+'</div>'; };
+
+  let h = '<h1 class="page-title">Komuta Merkezi</h1><div class="page-desc">'+ayAd+' '+Y+'</div>';
+
+  // 1) ACİL İŞLER
+  let acilBody='';
+  kritikCek.forEach(function(x){
+    acilBody += line(x.firma_ad, 'Karşılıksız çek — riski dondur', num(x.acik_bakiye)>0?TL(x.acik_bakiye):'', '--red')
+      + '<div style="text-align:right;margin:-4px 0 8px">'+ctaBtn('Firma 360 Aç',"openFirmaDetay('"+x.firma_id+"')")+'</div>';
+  });
+  if(opGeciken>0){
+    acilBody += line(opGeciken+' sipariş teslimi GECİKTİ', gecikenList.slice(0,3).map(function(s){return firmaAdOf(s.firma_id);}).join(', ')+(opGeciken>3?(' +'+(opGeciken-3)):''), '', '--red')
+      + '<div style="text-align:right;margin:-4px 0 4px">'+ctaBtn('Operasyona Git',"showPage('uretim')")+'</div>';
+  }
+  if(!acilBody) acilBody = okBox('Acil iş yok');
+  h += sect('ACİL İŞLER', (kritikCek.length||opGeciken)?'kritik':'ok', acilBody);
+
+  // 2) BUGÜN YAPILACAKLAR (Pulse)
+  let yapBody = yapilacak.length ? yapilacak.map(function(x){
+    return line(x.firma_ad, x.aksiyon, num(x.acik_bakiye)>0?TL(x.acik_bakiye):'', num(x.siddet)>=4?'--red':'--text')
+      + '<div style="text-align:right;margin:-4px 0 8px">'+ctaBtn('Firma 360 Aç',"openFirmaDetay('"+x.firma_id+"')")+'</div>';
+  }).join('') : (pulse.length ? okBox('Aksiyon eşiğini geçen firma yok') : '<div class="hm-empty"><span class="ico">—</span>Pulse verisi yok</div>');
+  h += sect('BUGÜN YAPILACAKLAR', 'uyari', yapBody);
+
+  // 3) TAHSİLAT RİSKLERİ
+  let tahBody='';
+  if(bekCek>0) tahBody += line(bekCek+' çek bekliyor', 'Vade / karşılık takibi', '', '--accent');
+  odemeRisk.forEach(function(x){
+    tahBody += line(x.firma_ad, 'Açık bakiye yüksek — tahsilat zamanı', TL(x.acik_bakiye), '--accent')
+      + '<div style="text-align:right;margin:-4px 0 8px">'+ctaBtn('Tahsilat',"openTahsilat('"+x.firma_id+"')")+'</div>';
+  });
+  if(!tahBody) tahBody = okBox('Tahsilat riski yok');
+  h += sect('TAHSİLAT RİSKLERİ', (bekCek>0||odemeRisk.length)?'uyari':'ok', tahBody);
+
+  // 4) OPERASYON RİSKLERİ
+  let opBody = line('Bugün teslim: '+opTeslim+'  ·  Geciken: '+opGeciken+'  ·  Üretimde: '+opUretimde, '', '', opGeciken>0?'--red':'--text');
+  h += sect('OPERASYON RİSKLERİ', opGeciken>0?'kritik':'bilgi', opBody, ctaBtn('Operasyona Git',"showPage('uretim')"));
+
+  // 5) KÂRLILIK RİSKLERİ
+  let karBody='';
+  if(eksikMaliyet>0) karBody += line(eksikMaliyet+' üründe maliyet eksik', 'Kâr güvenilmez — gösterilmiyor', '', '--accent');
+  if(negatifMarj>0) karBody += line(negatifMarj+' üründe negatif marj', 'Zararına satış — fiyat/maliyet düzelt', '', '--red');
+  if(!karBody) karBody = okBox('Kârlılık riski yok — maliyetler tam');
+  h += sect('KÂRLILIK RİSKLERİ', negatifMarj>0?'kritik':(eksikMaliyet>0?'uyari':'ok'), karBody, eksikMaliyet>0?ctaBtn('Maliyetleri Gir',"openMaliyetEksik()"):'');
+
+  // 6) FİNANSAL ÖZET (en alt)
+  const karGoster = karGuvenilir ? TL(ayK) : '<span style="color:var(--accent)">⚠ Kâr hesaplanamıyor — maliyet eksik</span>';
+  h += '<div class="card"><div class="card-title">FİNANSAL ÖZET · '+ayAd+'</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px 20px;align-items:baseline">'
+    + '<span style="font-size:12px;color:var(--text-dim)">Açık Bakiye <b style="font-size:16px;color:var('+(acikBakiye>0?'--red':'--text')+')">'+TL(acikBakiye)+'</b></span>'
+    + '<span style="font-size:12px;color:var(--text-dim)">Nakit <b style="font-size:14px">'+TL(nakit)+'</b></span>'
+    + '<span style="font-size:12px;color:var(--text-dim)">Satış <b>'+TL(ayS)+'</b></span>'
+    + '<span style="font-size:12px;color:var(--text-dim)">Tahsilat <b>'+TL(ayT)+'</b></span>'
+    + '<span style="font-size:12px;color:var(--text-dim)">Kâr <b>'+karGoster+'</b></span>'
     + '</div></div>';
 
-  // ---- BÖLÜM 2: NE YAPMALI — PULSE TOP-5 (v_firma_pulse; öncelik = şiddet × para etkisi) [PULSE-2]
-  const RISK_ETIKET = {kritik_cek:'ÇEK', kayip:'KAYIP RİSKİ', odeme:'TAHSİLAT', uyuyan:'UYUYAN', beklenen_siparis:'SİPARİŞ ZAMANI'};
-  const pAks = pulse.filter(function(x){return x.aksiyon && num(x.siddet)>=2;}).sort(function(a,b){return num(b.oncelik_skoru)-num(a.oncelik_skoru);}).slice(0,5);
-  const s2 = pAks.length ? pAks.map(function(x){
-    const tagCls = num(x.siddet)>=4?'tag-red':'tag-yellow';
-    const badge = '<span class="tag '+tagCls+'">'+(RISK_ETIKET[x.risk_sinif]||'')+'</span>';
-    return row(x.firma_ad, x.aksiyon, (num(x.acik_bakiye)>0?TL(x.acik_bakiye):''), num(x.siddet)>=4?'--red':'--text', badge);
-  }).join('') : (pulse.length ? emptyBox('🟢','Bugün aksiyon eşiğini geçen firma yok. (Eşik: şiddet ≥ 2 — "her şey yolunda" demek değildir)') : emptyBox('💓','Pulse verisi yüklenemedi'));
-  h += '<div class="card" style="border:2px solid var(--accent)"><div class="card-title">🎯 Bugün Ne Yapmalı — Pulse</div>'+s2+'</div>';
-
-  // ---- BÖLÜM 3: OPERASYON SATIRI [DASH-V3] — renderUretim ile AYNI grup tanımları (teslim_tarihi||tarih)
-  const bugunStr = today();
-  let opTeslim=0, opGeciken=0, opUretimde=0;
-  aktifSips.forEach(function(s){ const t=(s.teslim_tarihi||s.tarih); if(t<bugunStr) opGeciken++; else if(t===bugunStr) opTeslim++; if(s.durum==='uretimde') opUretimde++; });
-  h += '<div class="card" style="padding:10px 14px;cursor:pointer" onclick="showPage(\'uretim\')"><div class="flex-between"><span style="font-size:13px">🏭 Bugün teslim <b>'+opTeslim+'</b> · Geciken <b style="color:var('+(opGeciken>0?'--red':'--text')+')">'+opGeciken+'</b> · Üretimde <b>'+opUretimde+'</b></span><span style="font-size:11px;color:var(--text-dim)">Üretim →</span></div></div>';
-
-  // ---- BÖLÜM 4: SİSTEM UYARILARI ([DASH-V3] En Değerli/Kârlı/Çok Satan Analiz'e taşındı)
-  const eksikMaliyet = (typeof URUNLER!=='undefined'?URUNLER:[]).filter(function(u){return u.satis_urunu!==false && !Number(u.birim_maliyet);}).length;
-  const fiyatliSet={}; (typeof FIYATLAR!=='undefined'?FIYATLAR:[]).forEach(function(p){ if(p&&p.firma_id) fiyatliSet[p.firma_id]=true; });
-  const fiyatsiz = (typeof FIRMALAR!=='undefined'?FIRMALAR:[]).filter(function(f){return !fiyatliSet[f.id];}).length;
-  const uyuyan90 = pulse.filter(function(x){return num(x.sessiz_gun)>=90;}).length;
-  const uyariList=[];
-  if(eksikMaliyet>0) uyariList.push(['💰', eksikMaliyet+' üründe maliyet eksik']);
-  if(fiyatsiz>0) uyariList.push(['🏷️', fiyatsiz+' firmada fiyat tanımlı değil']);
-  if(bekCek>0) uyariList.push(['🧾', bekCek+' çek bekliyor']);
-  if(uyuyan90>0) uyariList.push(['😴', uyuyan90+' firma 90+ gündür sipariş vermedi']);
-  const s7 = uyariList.length ? uyariList.map(function(u){ return '<div class="hm-row"><div class="hm-main"><div class="hm-name">'+u[0]+' '+escapeHtml(u[1])+'</div></div></div>'; }).join('') : emptyBox('✅','Sistem uyarısı bulunmuyor');
-  h += card('⚙️ Sistem Uyarıları', s7);
-
-  el.innerHTML = h;
+  el.innerHTML = h; // [KOMUTA-V2]
 }
 
 async function renderPanel(){
