@@ -2,7 +2,8 @@
    index.html unchanged. No JS/data/render/mutation change. Finguard redaction preserved.
    Direction: Apple-like calm clarity + restrained Bardaks brand accent (logo blue) + dense B2B usability.
    Semantic status colors (red/green) kept clear; brand color used ONLY as restrained accent.
-   NOTE: Bardaks line-art = inspiration / design language only (see BRAND_GUIDE.md); no inline illustration printed. */
+   NOTE: Bardaks line-art = inspiration / design language only (see BRAND_GUIDE.md); no inline illustration printed.
+   UX-2 (2026): floating action buttons -> discreet utility (no big colored pills); calmer surfaces. */
 
 :root{
   --ux-brand:#1e5ba8;     /* Bardaks logo accent */
@@ -82,6 +83,28 @@ body { background: var(--ux-bg) !important; -webkit-font-smoothing: antialiased;
 /* ---- Selected state accent (brand) ---- */
 .ub-row.sel{ border-color: var(--ux-brand) !important; }
 
+/* ============================================================
+   UX-2 — Floating action buttons: discreet utility, not big colored pills.
+   Net & Banka (#nb-fab) ve Batch Üretim (#ub-fab) artık nötr, küçük, kenarda;
+   işlev korunur, görsel ağırlık düşer (kurumsal his). CSS-only, reversible.
+   ============================================================ */
+#nb-fab, #ub-fab{
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding: 8px 13px !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  color: var(--ux-ink) !important;
+  border: 1px solid var(--ux-border) !important;
+  box-shadow: 0 1px 3px rgba(16,32,56,.14) !important;
+  opacity: .94;
+}
+#nb-fab:hover, #ub-fab:hover{ opacity: 1; filter: brightness(.98); }
+#nb-fab:focus-visible, #ub-fab:focus-visible{ outline: 2px solid var(--ux-brand); outline-offset: 2px; }
+
+/* Net Kâr/Banka overlay + Firma Yönetim overlay: nötr başlık şeridi (yeşil/koyu vurgu yerine sade) */
+#nb-panel h2{ font-size: 16px !important; font-weight: 650 !important; }
+
 /* ---- Mobile: small safe improvements ---- */
 @media (max-width: 560px){
   .table-wrap{ overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -89,4 +112,5 @@ body { background: var(--ux-bg) !important; -webkit-font-smoothing: antialiased;
   .stats{ gap: 8px; }
   .nav-item{ font-size: 10px; }
   .nav-item .nav-ico{ font-size: 17px; }
+  #nb-fab, #ub-fab{ font-size: 11px !important; padding: 7px 11px !important; }
 }
