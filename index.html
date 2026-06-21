@@ -342,7 +342,7 @@ function buildNav(){
   }
   nav.innerHTML = items.map(function(i){
     const badge = i.id==='sohbet' ? '<span class="nav-badge hidden" id="sohbetBadge">0</span>' : '';
-    return '<button class="nav-item" data-page="'+i.id+'" onclick="showPage(\''+i.id+'\')"><span class="nav-ico">'+i.ico+badge+'</span>'+i.label+'</button>';
+    return '<button class="nav-item" data-page="'+i.id+'" onclick="showPage(\''+i.id+'\')"><span class="nav-ico">'+badge+'</span>'+i.label+'</button>';
   }).join('');
   refreshSohbetBadge();
 }
@@ -891,7 +891,7 @@ async function renderUretim(){
   kol.uretimde.sort(function(a,b){ return String(a.uretimde_at||'').localeCompare(String(b.uretimde_at||'')); });
   kol.hazir.sort(function(a,b){ return String(a.hazir_at||'').localeCompare(String(b.hazir_at||'')); });
   var kolMeta = [['bekleyen','🕒 Bekleyen','var(--text)'],['uretimde','🔥 Üretimde','var(--accent)'],['hazir','✅ Hazır','var(--blue)']];
-  var h = '<div class="flex-between mb"><h1 class="page-title">🏭 Üretim</h1>'+uretimToggleHtml()+'</div><div class="page-desc">'+trDate(bugunStr)+' · '+siparisler.length+' aktif · öncelik soldan sağa, en üst kart önce</div>';
+  var h = '<div class="flex-between mb"><h1 class="page-title">Üretim</h1>'+uretimToggleHtml()+'</div><div class="page-desc">'+trDate(bugunStr)+' · '+siparisler.length+' aktif · öncelik soldan sağa, en üst kart önce</div>';
   h += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px"><div style="display:grid;grid-auto-flow:column;grid-auto-columns:minmax(250px,1fr);gap:10px;align-items:start">';
   kolMeta.forEach(function(m){
     var key=m[0], list=kol[key];
@@ -935,7 +935,7 @@ function renderUretimPulse(el, siparisler, kalemler){
   });
   const liste=Object.keys(urunler).map(function(k){return urunler[k];}).filter(function(u){return u.kalan>0;}).sort(function(a,b){return b.kalan-a.kalan;});
 
-  let h = '<div class="flex-between mb"><h1 class="page-title">🏭 Üretim</h1>'+uretimToggleHtml()+'</div><div class="page-desc">'+trDate(bugunStr)+' · ürün bazlı</div>';
+  let h = '<div class="flex-between mb"><h1 class="page-title">Üretim</h1>'+uretimToggleHtml()+'</div><div class="page-desc">'+trDate(bugunStr)+' · ürün bazlı</div>';
   const sayac=function(lbl,val,col){ return '<div class="stat" style="padding:12px"><div class="stat-label">'+lbl+'</div><div class="stat-value" style="font-size:22px;color:var('+col+')">'+val+'</div></div>'; };
   h += '<div class="stats" style="grid-template-columns:repeat(4,1fr);gap:8px">'
     + sayac('Geciken', opGeciken, opGeciken>0?'--red':'--text')
@@ -1248,7 +1248,7 @@ async function renderAnaliz(){
   const urunList=Object.keys(urunAdet).map(function(k){return [k,urunAdet[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,15);
   const maxAdet=urunList.length?urunList[0][1]:1;
   const toplamCiro=firmaList.reduce(function(s,x){return s+x[1];},0);
-  el.innerHTML='<h1 class="page-title">📈 Analiz</h1><div class="pill-tabs"><div class="pill '+(analizDonem==='hafta'?'active':'')+'" onclick="analizDonem=\'hafta\';renderAnaliz()">Haftalık</div><div class="pill '+(analizDonem==='ay'?'active':'')+'" onclick="analizDonem=\'ay\';renderAnaliz()">Aylık</div><div class="pill '+(analizDonem==='yil'?'active':'')+'" onclick="analizDonem=\'yil\';renderAnaliz()">Yıllık</div></div><div class="stats"><div class="stat"><div class="stat-label">Toplam Ciro</div><div class="stat-value accent">'+TL(toplamCiro)+'</div></div><div class="stat"><div class="stat-label">Sipariş Sayısı</div><div class="stat-value">'+(sips||[]).length+'</div></div><div class="stat"><div class="stat-label">Aktif Firma</div><div class="stat-value">'+firmaList.length+'</div></div></div><div class="card"><div class="card-title">Firma Karşılaştırma (Ciro)</div>'+(firmaList.map(function(x){return '<div style="margin-bottom:10px"><div class="flex-between" style="font-size:13px;margin-bottom:3px"><span>'+x[0]+'</span><strong>'+TL(x[1])+'</strong></div><div style="background:var(--surface2);border-radius:5px;height:8px"><div style="background:var(--accent);height:8px;border-radius:5px;width:'+(x[1]/maxCiro*100)+'%"></div></div></div>';}).join('')||'<div class="empty">Veri yok</div>')+'</div><div class="card"><div class="card-title">En Çok Satan Ürünler (Adet)</div>'+(urunList.map(function(x){return '<div style="margin-bottom:10px"><div class="flex-between" style="font-size:13px;margin-bottom:3px"><span>'+x[0]+'</span><strong>'+x[1]+' adet</strong></div><div style="background:var(--surface2);border-radius:5px;height:8px"><div style="background:var(--green);height:8px;border-radius:5px;width:'+(x[1]/maxAdet*100)+'%"></div></div></div>';}).join('')||'<div class="empty">Veri yok</div>')+'</div>';
+  el.innerHTML='<h1 class="page-title">Analiz</h1><div class="pill-tabs"><div class="pill '+(analizDonem==='hafta'?'active':'')+'" onclick="analizDonem=\'hafta\';renderAnaliz()">Haftalık</div><div class="pill '+(analizDonem==='ay'?'active':'')+'" onclick="analizDonem=\'ay\';renderAnaliz()">Aylık</div><div class="pill '+(analizDonem==='yil'?'active':'')+'" onclick="analizDonem=\'yil\';renderAnaliz()">Yıllık</div></div><div class="stats"><div class="stat"><div class="stat-label">Toplam Ciro</div><div class="stat-value accent">'+TL(toplamCiro)+'</div></div><div class="stat"><div class="stat-label">Sipariş Sayısı</div><div class="stat-value">'+(sips||[]).length+'</div></div><div class="stat"><div class="stat-label">Aktif Firma</div><div class="stat-value">'+firmaList.length+'</div></div></div><div class="card"><div class="card-title">Firma Karşılaştırma (Ciro)</div>'+(firmaList.map(function(x){return '<div style="margin-bottom:10px"><div class="flex-between" style="font-size:13px;margin-bottom:3px"><span>'+x[0]+'</span><strong>'+TL(x[1])+'</strong></div><div style="background:var(--surface2);border-radius:5px;height:8px"><div style="background:var(--accent);height:8px;border-radius:5px;width:'+(x[1]/maxCiro*100)+'%"></div></div></div>';}).join('')||'<div class="empty">Veri yok</div>')+'</div><div class="card"><div class="card-title">En Çok Satan Ürünler (Adet)</div>'+(urunList.map(function(x){return '<div style="margin-bottom:10px"><div class="flex-between" style="font-size:13px;margin-bottom:3px"><span>'+x[0]+'</span><strong>'+x[1]+' adet</strong></div><div style="background:var(--surface2);border-radius:5px;height:8px"><div style="background:var(--green);height:8px;border-radius:5px;width:'+(x[1]/maxAdet*100)+'%"></div></div></div>';}).join('')||'<div class="empty">Veri yok</div>')+'</div>';
   // ---- [DASH-V3] TÜM ZAMANLAR — Komuta'dan taşınan kartlar (mantık/sorgu birebir; veri kaybı yok)
   try{
     const numA=function(x){return Number(x||0);};
@@ -1277,7 +1277,7 @@ function showPage_quiet(id){
 }
 async function renderGunOzeti(){
   const el=document.getElementById('page-gunozeti');
-  el.innerHTML='<div class="flex-between mb"><h1 class="page-title">📋 Gün Özetleri</h1>'+(CURRENT.rol!=='imalathane'?'<button class="btn" onclick="openYeniOzet()">+ Yaz</button>':'')+'</div><input id="ozetArama" placeholder="🔍 Ara: greenwich ödeme, musluk..." oninput="araOzet()" class="mb"><div id="ozetList"><div class="loading">Yükleniyor...</div></div>';
+  el.innerHTML='<div class="flex-between mb"><h1 class="page-title">Gün Özetleri</h1>'+(CURRENT.rol!=='imalathane'?'<button class="btn" onclick="openYeniOzet()">+ Yaz</button>':'')+'</div><input id="ozetArama" placeholder="🔍 Ara: greenwich ödeme, musluk..." oninput="araOzet()" class="mb"><div id="ozetList"><div class="loading">Yükleniyor...</div></div>';
   araOzet();
 }
 async function araOzet(){
@@ -1466,7 +1466,7 @@ async function renderFinans(){
   function riskEt(s){ return s>=67?'Yüksek':(s>=34?'Orta':'Düşük'); }
   const firmaList = Object.keys(acikMap).filter(function(k){return (acikMap[k]||0)>1 || (hacimMap[k]||0)>0;});
   const riskList = firmaList.map(function(fid){return {ad:(FIRMALAR.find(function(f){return f.id===fid;})||{}).ad||'?', acik:Math.max(0,acikMap[fid]||0), gec:Math.max(0,gecMap[fid]||0), hac:hacimMap[fid]||0, risk:riskHesap(fid)};}).sort(function(a,b){return b.risk-a.risk;});
-  let h = '<h1 class="page-title">💰 Risk & Nakit</h1><div class="page-desc">Nakit projeksiyonu + firma risk skorları</div>';
+  let h = '<h1 class="page-title">Risk & Nakit</h1><div class="page-desc">Nakit projeksiyonu + firma risk skorları</div>';
   h += '<div class="card"><div class="card-title">📈 30 Günlük Nakit Projeksiyonu</div><div class="table-wrap"><table><tr><td>Beklenen Tahsilat (açık alacak)</td><td style="text-align:right;color:var(--green);font-weight:700">+'+TL(girisBeklenen)+'</td></tr><tr><td>Beklenen Gider (son 30g baz)</td><td style="text-align:right;color:var(--red)">−'+TL(cikisBeklenen)+'</td></tr><tr><td><strong>Net 30g Projeksiyon</strong></td><td style="text-align:right;font-weight:700;color:var('+(net30>=0?'--green':'--red')+')">'+TL(net30)+'</td></tr></table></div><div style="font-size:11px;color:var(--text-dim);margin-top:6px">Varsayım: açık alacaklar 30 günde tahsil edilir; gider son 30 günün baz alındığı tahmindir.</div></div>';
   h += '<div class="card"><div class="card-title">🎯 Firma Risk & Tahsilat</div><div class="table-wrap"><table><tr><th>Firma</th><th style="text-align:right">Açık</th><th style="text-align:right">Geciken</th><th style="text-align:center">Sip.(90g)</th><th style="text-align:center">Risk</th></tr>';
   h += riskList.map(function(x){return '<tr><td>'+x.ad+'</td><td style="text-align:right">'+TL(x.acik)+'</td><td style="text-align:right;color:'+(x.gec>0?'var(--red)':'var(--text-dim)')+'">'+TL(x.gec)+'</td><td style="text-align:center">'+x.hac+'</td><td style="text-align:center;font-weight:700;color:'+riskRenk(x.risk)+'">'+x.risk+'<div style="font-size:10px;font-weight:400">'+riskEt(x.risk)+'</div></td></tr>';}).join('')||'<tr><td colspan=5 class="empty">Veri yok</td></tr>';
