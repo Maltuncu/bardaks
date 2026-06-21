@@ -63,7 +63,7 @@
 
     // Firma Yönetim Overlay (Yönet butonlarından açılır)
     var rov=document.createElement('div'); rov.id='fy-ov';
-    rov.innerHTML='<div class="fy-bar"><b>📄 Firma Yönetim</b><button class="fy-x" onclick="document.getElementById(\'fy-ov\').classList.remove(\'open\')">✕ Kapat</button></div>'
+    rov.innerHTML='<div class="fy-bar"><b>Firma Yönetim</b><button class="fy-x" onclick="document.getElementById(\'fy-ov\').classList.remove(\'open\')">✕ Kapat</button></div>'
       +'<iframe id="fy-frame" src="about:blank"></iframe>';
     document.body.appendChild(rov);
 
