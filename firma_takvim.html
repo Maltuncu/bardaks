@@ -36,7 +36,7 @@ select:focus,input:focus{outline:none;border-color:var(--ac)}
 .hero-lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--dm);font-weight:700}
 .hero-score{font-size:13px;color:var(--dm)} .hero-score b{font-size:18px}
 .badge{display:inline-flex;align-items:center;gap:7px;font-size:20px;font-weight:800;margin-top:10px;padding:6px 14px;border-radius:999px;line-height:1}
-.badge.rd{background:rgba(227,106,106,.16);color:var(--rd)} .badge.gn{background:rgba(86,185,138,.16);color:var(--gn)} .badge.nt{background:var(--s2);color:var(--dm)}
+.badge.rd{background:rgba(227,106,106,.16);color:var(--rd)} .badge.gn{background:rgba(86,185,138,.16);color:var(--gn)} .badge.nt{background:var(--s2);color:var(--dm)}.badge.wn{background:rgba(230,170,30,.18);color:#9a6b00}
 .hero-reason{font-size:14px;color:var(--tx);margin-top:12px;line-height:1.5}
 .hero-act{display:block;width:100%;text-align:center;margin-top:14px;padding:13px;border-radius:10px;font-weight:800;font-size:15px;border:none;cursor:pointer}
 .hero-act.call{background:var(--rd);color:#fff;box-shadow:0 2px 10px rgba(227,106,106,.35)}
@@ -481,22 +481,22 @@ async function renderOzet(){
     +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
       +'<div><div style="font-size:18px;font-weight:800">'+esc(firmaAd)+' <span style="font-size:11px;background:#E1F5EE;color:var(--gn);border-radius:12px;padding:2px 8px">aktif</span></div>'
       +'<div style="font-size:12px;color:var(--dm);margin-top:2px">Firma 360</div></div>'
-      +'<div style="font-size:12px;color:var(--dm);text-align:right;line-height:1.6">\ud83d\udc64 '+esc(_yetk)+' \u00b7 \u260e '+esc(_tel)+'<br>VKN '+esc(_vno)+' \u00b7 son sip. '+_sonSip+' \u00b7 son tah. '+_sonTah+'</div>'
+      +'<div style="font-size:12px;color:var(--dm);text-align:right;line-height:1.6">'+esc(_yetk)+' \u00b7 '+esc(_tel)+'<br>VKN '+esc(_vno)+' \u00b7 son sip. '+_sonSip+' \u00b7 son tah. '+_sonTah+'</div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px">'
       +'<div style="background:var(--s2);border-radius:10px;padding:10px"><div style="font-size:11px;color:var(--dm)">Net Bakiye</div><div style="font-size:18px;font-weight:800;color:var('+(kalan>0?'--rd':'--gn')+')">'+TL(kalan)+'</div></div>'
       +'<div style="background:var(--s2);border-radius:10px;padding:10px"><div style="font-size:11px;color:var(--dm)">Bekleyen \u00c7ek</div><div style="font-size:18px;font-weight:800">'+AD(bekCek)+' adet</div></div>'
-      +'<div style="background:var(--s2);border-radius:10px;padding:10px"><div style="font-size:11px;color:var(--dm)">Geciken / A\u00e7\u0131k \u00d6deme</div><div style="font-size:18px;font-weight:800;color:var('+(kalan>0?'--rd':'--gn')+')">'+(kalan>0?TL(kalan):'0 \u20ba')+'</div></div>'
+      +'<div style="background:var(--s2);border-radius:10px;padding:10px"><div style="font-size:11px;color:var(--dm)">Son Tahsilat</div><div style="font-size:18px;font-weight:800>'+_sonTah+'</div></div>'
       +'<div style="background:var(--s2);border-radius:10px;padding:10px"><div style="font-size:11px;color:var(--dm)">Bu Ay Sipari\u015f</div><div style="font-size:18px;font-weight:800">'+AD(_buAy)+'</div></div>'
     +'</div>'
     +'<div style="margin-top:8px">'+_karHtml+'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px">'
-      +'<button class="b s" onclick="openDay(tdy())">\u2795 Sipari\u015f</button>'
-      +'<button class="b s" onclick="fmOpenTahsilat()">\ud83d\udcb5 Tahsilat</button>'
-      +'<button class="b s" onclick="setTab(\'cek\')">\ud83e\uddfe \u00c7ek</button>'
-      +'<button class="b s" onclick="setTab(\'fiyat\')">\ud83c\udff7 Fiyat</button>'
-      +'<button class="b s" onclick="setTab(\'bakiye\')">\ud83d\udcc4 Ekstre</button>'
-      +'<button class="b s" onclick="setTab(\'rapor\')">\ud83d\udcc8 Rapor</button>'
+      +'<button class="b s" onclick="openDay(tdy())">Sipari\u015f</button>'
+      +'<button class="b s" onclick="fmOpenTahsilat()">Tahsilat</button>'
+      +'<button class="b s" onclick="setTab(\'cek\')">\u00c7ek</button>'
+      +'<button class="b s" onclick="setTab(\'fiyat\')">Fiyat</button>'
+      +'<button class="b s" onclick="setTab(\'bakiye\')">Ekstre</button>'
+      +'<button class="b s" onclick="setTab(\'rapor\')">Rapor</button>'
     +'</div>'
   +'</div>';
   // 1) MÜŞTERİ NABZI — HERO (durum + sebep + tek aksiyon). Mantık değişmez; pulse'tan türetilir.
@@ -507,33 +507,33 @@ async function renderOzet(){
       : 'son sessizlik '+pv.sessiz_gun+' gün';
     var beklenenTxt=pv.beklenen_siparis_tarihi?(' · beklenen sipariş '+trd(pv.beklenen_siparis_tarihi)):'';
     if(pv.risk_sinif==='kayip'||pv.risk_sinif==='kritik_cek'){
-      heroCls=' s-rd';badgeCls='rd';badgeTxt=(pv.risk_sinif==='kritik_cek'?'🔴 ACİL — ÇEK':'🔴 ARA');
+      heroCls=' s-rd';badgeCls='rd';badgeTxt=(pv.risk_sinif==='kritik_cek'?'ACİL — ÇEK':'ARA');
       reason=esc(pv.aksiyon||'')+' · '+ritimTxt;
-      actHtml='<button class="hero-act call" onclick="openRel()">☎ '+esc(firmaAd)+'’i ara · görüşmeyi kaydet</button>';
+      actHtml='<button class="hero-act call" onclick="openRel()">'+esc(firmaAd)+'’i ara · görüşmeyi kaydet</button>';
     } else if(pv.risk_sinif){
-      heroCls='';badgeCls='nt';badgeTxt=(pv.risk_sinif==='odeme'?'🟡 TAHSİLAT':'🟡 RİTİM GECİKTİ');
+      heroCls='';badgeCls='wn';badgeTxt=(pv.risk_sinif==='odeme'?'TAHSİLAT':'RİTİM GECİKTİ');
       reason=esc(pv.aksiyon||'')+' · '+ritimTxt+beklenenTxt;
-      actHtml='<button class="hero-act call" onclick="openRel()">☎ '+esc(firmaAd)+'’i ara · görüşmeyi kaydet</button>';
+      actHtml='<button class="hero-act call" onclick="openRel()">'+esc(firmaAd)+'’i ara · görüşmeyi kaydet</button>';
     } else {
-      heroCls=' s-gn';badgeCls='gn';badgeTxt='🟢 NORMAL';
+      heroCls=' s-gn';badgeCls='gn';badgeTxt='NORMAL';
       reason='Sipariş ritmi normal — '+ritimTxt+beklenenTxt+'. Şimdilik bekle.';
       actHtml='<div class="hero-act calm">✓ Aksiyon gerekmiyor — ritim normal</div>';
     }
   } else if(!pulse.yeterli){
-    heroCls='';badgeCls='nt';badgeTxt='⚪ VERİ YOK';
+    heroCls='';badgeCls='nt';badgeTxt='VERİ YOK';
     reason='Nabız için yeterli sipariş geçmişi yok (en az 3 sipariş). Veri girilince otomatik hesaplanır.';
     actHtml='';
   } else if(pulse.normalDisi){
-    heroCls=' s-rd';badgeCls='rd';badgeTxt='🔴 ARA';
+    heroCls=' s-rd';badgeCls='rd';badgeTxt='ARA';
     reason='Normal sipariş ritminin dışında — son sessizlik <b>'+pulse.sonSessizlik+' gün</b> (alışkanlık ~'+(pulse.med%1?pulse.med.toFixed(1):pulse.med)+' gün). Beklenen sipariş '+trd(_isoLocal(pulse.expected))+' idi.';
-    actHtml='<button class="hero-act call" onclick="openRel()">☎ '+esc(firmaAd)+'’i ara · görüşmeyi kaydet</button>';
+    actHtml='<button class="hero-act call" onclick="openRel()">'+esc(firmaAd)+'’i ara · görüşmeyi kaydet</button>';
   } else {
-    heroCls=' s-gn';badgeCls='gn';badgeTxt='🟢 NORMAL';
+    heroCls=' s-gn';badgeCls='gn';badgeTxt='NORMAL';
     reason='Sipariş ritmi normal — son sessizlik '+pulse.sonSessizlik+' gün, beklenen sipariş '+trd(_isoLocal(pulse.expected))+'. Şimdilik bekle.';
     actHtml='<div class="hero-act calm">✓ Aksiyon gerekmiyor — ritim normal</div>';
   }
   h+='<div class="hero'+heroCls+'">'
-    +'<div class="hero-top"><span class="hero-lbl">📡 Müşteri Nabzı</span>'
+    +'<div class="hero-top"><span class="hero-lbl">Müşteri Nabzı</span>'
     +(pv?'<span class="hero-score">Sağlık <b style="color:var('+(pv.health_renk==='yesil'?'--gn':pv.health_renk==='sari'?'--ac':'--rd')+')">'+pv.health_skor+'</b>/100 · Pulse</span>'
        :(pulse.yeterli?'<span class="hero-score">Sağlık <b style="color:var('+(health.score>=85?'--gn':health.score>=70?'--ac':'--rd')+')">'+health.score+'</b>/100 · güven '+pulse.guven+'</span>':''))+'</div>'
     +'<div class="badge '+badgeCls+'">'+badgeTxt+'</div>'
@@ -560,7 +560,7 @@ async function renderOzet(){
     +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'+(cipler||'<span style="color:var(--dm);font-size:12px">temiz</span>')+'</div></div>';
   h+='<button class="b" style="width:100%;margin-bottom:10px" onclick="openTeklif()">Teklif Oluştur</button>';
   var fNot=((F.find(function(f){return f.id===fid;})||{}).notlar||'').trim();
-  h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:'+(fNot?'6px':'0')+'"><b>Firma Notu</b><button class="b s" style="font-size:12px;padding:5px 10px" onclick="openFirmaNot()">'+(fNot?'✏️ Düzenle':'➕ Not Ekle')+'</button></div>'
+  h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:'+(fNot?'6px':'0')+'"><b>Firma Notu</b><button class="b s" style="font-size:12px;padding:5px 10px" onclick="openFirmaNot()">'+(fNot?'Düzenle':'Not Ekle')+'</button></div>'
     +(fNot?'<div style="white-space:pre-wrap;font-size:13px;max-height:160px;overflow-y:auto;line-height:1.5">'+esc(fNot)+'</div>':'<div style="color:var(--dm);font-size:13px">Firma notu yok</div>')+'</div>';
   // 5) TİCARİ ÖZET
   function kpi(lbl,val,clr){return '<div style="background:var(--s2);border-radius:10px;padding:10px"><div style="font-size:11px;color:var(--dm)">'+lbl+'</div><div style="font-size:17px;font-weight:800'+(clr?';color:var('+clr+')':'')+'">'+val+'</div></div>';}
