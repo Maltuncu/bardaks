@@ -836,7 +836,11 @@ async function renderUretim(){
   const el = document.getElementById('page-uretim');
   el.innerHTML = '<div class="loading">Yükleniyor...</div>';
   const rs = await sb.from('siparisler').select('*').in('durum',['bekleyen','uretimde','hazir']).eq('is_deleted',false).order('teslim_tarihi',{ascending:true,nullsFirst:false});
-  const siparisler = rs.data||[];
+  const _bugAktif = today();
+  const siparisler = (rs.data||[]).filter(function(s){
+    if(s.durum==='bekleyen'||s.durum==='uretimde') return true; // uretim bekliyor (gecikmis olsa da acil)
+    return (s.teslim_tarihi||s.tarih) >= _bugAktif; // [UR-AKTIF-1] gecmis 'hazir' = uretim bitti, board'dan dus
+  });
   const ids = siparisler.map(function(s){return s.id;});
   let kalemler = [];
   if(ids.length){
@@ -1992,3 +1996,4 @@ async function silUrun(urunId, ad){
 <script src="netkar_banka.js"></script>
 </body>
 </html>
+
