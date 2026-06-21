@@ -40,7 +40,7 @@ select:focus,input:focus{outline:none;border-color:var(--ac)}
 .hero-reason{font-size:14px;color:var(--tx);margin-top:12px;line-height:1.5}
 .hero-act{display:block;width:100%;text-align:center;margin-top:14px;padding:13px;border-radius:10px;font-weight:800;font-size:15px;border:none;cursor:pointer}
 .hero-act.call{background:var(--rd);color:#fff;box-shadow:0 2px 10px rgba(227,106,106,.35)}
-.hero-act.calm{background:var(--s2);color:var(--gn);border:1px solid var(--bd)}
+.hero-act.calm{background:var(--s2);color:var(--gn);border:1px solid var(--bd)}.hero-act-mark{display:block;width:100%;margin-top:8px;padding:10px;border-radius:9px;background:var(--s2);color:var(--gn);border:1px solid var(--bd);font-weight:700;font-size:13px;cursor:pointer}
 .hero-meta{margin-top:14px;border-top:1px solid var(--bd);padding-top:10px}
 .l2{border-left:3px solid var(--ac)} .l2 b{color:var(--ac)}
 .lvl4{opacity:.92}
@@ -172,7 +172,7 @@ async function start(){
   const{data:{user}}=await sb.auth.getUser();document.getElementById('who').textContent=user?user.email:'';
   // [RM-1] aktif kullanıcı kimliği (görüşme kayıtlarının yazan/yazan_rol alanları için)
   if(user){ try{ const ku=await sb.from('kullanicilar').select('ad_soyad,rol').eq('auth_id',user.id).maybeSingle(); if(ku.data){ window.AKTIF_AD=ku.data.ad_soyad; window.AKTIF_ROL=ku.data.rol; } }catch(e){} }
-  rmImportLocal(); // tek-seferlik cihaz içe aktarımı (arka planda; orijinal anahtarlar silinmez)
+  void 0;/*[RM-2] görüşme günlüğü hafifletildi*/ // tek-seferlik cihaz içe aktarımı (arka planda; orijinal anahtarlar silinmez)
   await reloadData();
   document.getElementById('selF').innerHTML=F.map(f=>'<option value="'+f.id+'">'+f.ad+'</option>').join('');
   if(urlF) document.getElementById('selF').value=urlF;
@@ -363,34 +363,17 @@ function bkTasks(x){
 }
 function bkRelGet(fid){try{return JSON.parse(localStorage.getItem('bk_rel_'+fid)||'{}');}catch(e){return {};}}
 // [RM-1] Görüşme günlüğü: append-only firma_gorusmeleri; her kayıt YENİ satır, ezme yok.
-function openRel(){
-  var gecmis=(window.FG_GECMIS||[]).slice(0,3).map(function(g){
-    return '<div style="padding:6px 0;border-bottom:1px solid var(--bd);font-size:12px"><span style="color:var(--dm)">'+trd(g.gorusme_tarihi)+(g.gorusen_kisi?' · '+esc(g.gorusen_kisi):'')+'</span><div style="margin-top:2px">'+esc((g.not_metni||'').slice(0,120))+'</div></div>';
-  }).join('');
-  fmOpenMo('<div class="mp-h"><h3>Yeni Görüşme Kaydı</h3><button class="mp-x" onclick="closeMo()">✕</button></div>'
-  +'<label>Görüşme tarihi</label><input type="date" id="rlTar" value="'+_isoLocal(new Date())+'">'
-  +'<label>Görüşen kişi</label><input id="rlKisi" value="">'
-  +'<label>Görüşme notu</label><textarea id="rlNot" style="min-height:80px"></textarea>'
-  +'<label>Sonraki aksiyon tarihi (opsiyonel)</label><input type="date" id="rlSonraki" value="">'
-  +'<button class="b full" style="margin-top:10px;min-height:44px" id="rlBtn" onclick="saveRel()">Kaydet (tarihçeye ekle)</button>'
-  +(gecmis?'<div style="margin-top:12px;font-size:12px;color:var(--dm);font-weight:700">SON GÖRÜŞMELER</div>'+gecmis:''));
+function hizliArama(){ return _hizliAra(); }
+async function _hizliAra(){
+  var r=await sb.from('firma_gorusmeleri').insert({firma_id:cF,gorusme_tarihi:_isoLocal(new Date()),not_metni:'Arandı (hızlı işaret)',kaynak:'hizli',yazan:(window.AKTIF_AD||'panel'),yazan_rol:(window.AKTIF_ROL||null)});
+  if(r.error){ alert('İşaretlenemedi: '+(r.error.message||'')); return; }
+  render();
 }
-async function saveRel(){
-  var notv=fval('rlNot');
-  if(!notv||!notv.trim()){ var b=document.getElementById('rlBtn'); if(b){b.textContent='Not boş olamaz'; setTimeout(function(){b.textContent='Kaydet (tarihçeye ekle)';},1500);} return; }
-  var b2=document.getElementById('rlBtn'); if(b2){b2.disabled=true; b2.textContent='Kaydediliyor...';}
-  var r=await sb.from('firma_gorusmeleri').insert({
-    firma_id: cF,
-    gorusme_tarihi: fval('rlTar')||_isoLocal(new Date()),
-    gorusen_kisi: fval('rlKisi')||null,
-    not_metni: notv.trim(),
-    sonraki_aksiyon_tarihi: fval('rlSonraki')||null,
-    kaynak: 'manuel',
-    yazan: (window.AKTIF_AD||'panel'),
-    yazan_rol: (window.AKTIF_ROL||null)
-  });
-  if(r.error){ if(b2){b2.disabled=false; b2.textContent='Kaydedilemedi: '+(r.error.message||'').slice(0,40);} return; }
-  closeMo(); render();
+function _nabizCTA(ad,tel){
+  var t=(tel&&tel!=='—'&&tel!=='')?String(tel).replace(/[^0-9+]/g,''):'';
+  if(t) return '<a class="hero-act call" href="tel:'+t+'">'+esc(ad)+' — Ara</a>'
+    +'<button class="hero-act-mark" onclick="hizliArama()">Aradım, işaretle</button>';
+  return '<button class="hero-act call" onclick="hizliArama()">'+esc(ad)+' — ara · işaretle</button>';
 }
 // [RM-1] Tek-seferlik localStorage içe aktarımı: orijinal anahtar SİLİNMEZ (rollback güvenliği), imported işareti konur.
 async function rmImportLocal(){
@@ -424,8 +407,7 @@ async function renderOzet(){
     sb.from('tahsilatlar').select('tarih,tutar,odeme_tipi').eq('firma_id',fid).eq('is_deleted',false).order('tarih',{ascending:false}).limit(1),
     sb.from('siparisler').select('id,tarih,toplam_kdv_dahil').eq('firma_id',fid).eq('is_deleted',false).neq('durum','iptal').gte('tarih',bas12).order('tarih',{ascending:false}),
     sb.from('firmalar').select('resmi_unvan,vergi_no,vergi_dairesi,yetkili_kisi,telefon').eq('id',fid).maybeSingle(),
-    sb.from('v_firma_pulse').select('*').eq('firma_id',fid).maybeSingle(),
-    sb.from('firma_gorusmeleri').select('*').eq('firma_id',fid).order('gorusme_tarihi',{ascending:false}).order('olusturma',{ascending:false}).limit(5)
+    sb.from('v_firma_pulse').select('*').eq('firma_id',fid).maybeSingle()
   ]);
   if(res[0].error){
     c.innerHTML='<div class="card" style="text-align:center;color:var(--dm);padding:24px">⚠ Veri yüklenemedi. <button class="b s" onclick="render()" style="margin-left:8px">Tekrar dene</button></div>';
@@ -509,11 +491,11 @@ async function renderOzet(){
     if(pv.risk_sinif==='kayip'||pv.risk_sinif==='kritik_cek'){
       heroCls=' s-rd';badgeCls='rd';badgeTxt=(pv.risk_sinif==='kritik_cek'?'ACİL — ÇEK':'ARA');
       reason=esc(pv.aksiyon||'')+' · '+ritimTxt;
-      actHtml='<button class="hero-act call" onclick="openRel()">'+esc(firmaAd)+'’i ara · görüşmeyi kaydet</button>';
+      actHtml=_nabizCTA(firmaAd,_tel);
     } else if(pv.risk_sinif){
       heroCls='';badgeCls='wn';badgeTxt=(pv.risk_sinif==='odeme'?'TAHSİLAT':'RİTİM GECİKTİ');
       reason=esc(pv.aksiyon||'')+' · '+ritimTxt+beklenenTxt;
-      actHtml='<button class="hero-act call" onclick="openRel()">'+esc(firmaAd)+'’i ara · görüşmeyi kaydet</button>';
+      actHtml=_nabizCTA(firmaAd,_tel);
     } else {
       heroCls=' s-gn';badgeCls='gn';badgeTxt='NORMAL';
       reason='Sipariş ritmi normal — '+ritimTxt+beklenenTxt+'. Şimdilik bekle.';
@@ -526,7 +508,7 @@ async function renderOzet(){
   } else if(pulse.normalDisi){
     heroCls=' s-rd';badgeCls='rd';badgeTxt='ARA';
     reason='Normal sipariş ritminin dışında — son sessizlik <b>'+pulse.sonSessizlik+' gün</b> (alışkanlık ~'+(pulse.med%1?pulse.med.toFixed(1):pulse.med)+' gün). Beklenen sipariş '+trd(_isoLocal(pulse.expected))+' idi.';
-    actHtml='<button class="hero-act call" onclick="openRel()">'+esc(firmaAd)+'’i ara · görüşmeyi kaydet</button>';
+    actHtml=_nabizCTA(firmaAd,_tel);
   } else {
     heroCls=' s-gn';badgeCls='gn';badgeTxt='NORMAL';
     reason='Sipariş ritmi normal — son sessizlik '+pulse.sonSessizlik+' gün, beklenen sipariş '+trd(_isoLocal(pulse.expected))+'. Şimdilik bekle.';
@@ -582,21 +564,6 @@ async function renderOzet(){
     +'<tr><td>En Yüksek Sipariş</td><td class="n">'+(enYuksek>0?TL(enYuksek):'—')+'</td></tr>'
     +'<tr><td>Sipariş Alışkanlığı</td><td class="n">'+(pulse.yeterli?pulse.habit:'—')+'</td></tr>'
     +'</table>'+(toplamSip===0?'<div style="font-size:12px;color:var(--dm);margin-top:6px">Henüz sipariş yok — veri girilince hafıza dolacak.</div>':'')+'</div>';
-  // 7) İLİŞKİ KATMANI [RM-1] — firma_gorusmeleri (append-only, DB); localStorage yalnız tek-seferlik içe aktarım
-  var gorusmeler=(res[7]&&res[7].data)||[];
-  var fgErisim=!(res[7]&&res[7].error);
-  window.FG_GECMIS=gorusmeler;
-  if(fgErisim){
-    h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>Görüşme Günlüğü</b><button class="b s" style="font-size:12px;padding:8px 12px;min-height:40px" onclick="openRel()">Görüşme Ekle</button></div>';
-    if(gorusmeler.length){
-      var g0=gorusmeler[0];
-      h+='<div style="padding:8px 0"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--dm)"><span>'+trd(g0.gorusme_tarihi)+(g0.gorusen_kisi?' · '+esc(g0.gorusen_kisi):'')+'</span><span>'+esc(g0.yazan||'')+(g0.kaynak==='import_localstorage'?' · 📲 aktarım':'')+'</span></div>'
-        +'<div style="font-size:13px;margin-top:3px;white-space:pre-wrap;line-height:1.5">'+esc(g0.not_metni)+'</div>'
-        +(g0.sonraki_aksiyon_tarihi?'<div style="font-size:12px;color:var(--ac);margin-top:3px">⏭ Sonraki aksiyon: '+trd(g0.sonraki_aksiyon_tarihi)+'</div>':'')+'</div>'
-        +'<div style="font-size:12px;border-top:1px solid var(--bd);padding-top:7px"><a href="javascript:void(0)" onclick="setTab(\'gecmis\')" style="color:var(--ac);text-decoration:none">🕒 Tüm geçmiş ('+gorusmeler.length+(gorusmeler.length>=5?'+':'')+' kayıt) →</a></div>';
-    } else h+='<div style="color:var(--dm);font-size:13px;margin-top:4px">Henüz görüşme kaydı yok — her kayıt tarihçeye eklenir, üzerine yazılmaz.</div>';
-    h+='</div>';
-  }
   // 8) ÜRÜN DAVRANIŞI
   h+='<div class="card lvl4"><b>Ürün Davranışı</b>';
   if(top3.length){h+='<div style="font-size:12px;color:var(--dm);margin-top:6px">En çok (son 12 ay)</div><table class="rpt">'
@@ -1100,7 +1067,7 @@ async function renderGecmis(){
   }
   // ── akış
   if(!ev.length){
-    h+='<div class="card" style="text-align:center;padding:28px;color:var(--dm)"><div style="font-size:34px">🕒</div><div style="margin-top:6px;font-size:14px">Son 90 günde hareket yok</div><div style="font-size:12px;margin-top:4px">Bu firmanın hikâyesi burada birikecek.</div><button class="b" style="margin-top:12px;min-height:44px" onclick="openRel()">Görüşme Ekle</button></div>';
+    h+='<div class="card" style="text-align:center;padding:28px;color:var(--dm)"><div style="font-size:34px">🕒</div><div style="margin-top:6px;font-size:14px">Son 90 günde hareket yok</div><div style="font-size:12px;margin-top:4px">Bu firmanın hikâyesi burada birikecek.</div><button class="b" style="margin-top:12px;min-height:44px" onclick="hizliArama()">Aradım, işaretle</button></div>';
   } else {
     h+='<div class="card" style="padding:2px 0">';
     ev.forEach(function(e,i){
