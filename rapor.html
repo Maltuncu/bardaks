@@ -76,14 +76,14 @@ select:focus,input:focus{outline:none;border-color:var(--ac)}
     <div class="f"><label>Yıl</label><select id="sY" onchange="onY()"></select></div>
     <div class="f"><label>Ay</label><select id="sM" onchange="go()"></select></div>
     <div class="f" style="flex:1"><label>Firma</label><select id="sF" onchange="go()"></select></div>
-    <button class="b s" onclick="window.print()">🖨 Yazdır</button>
-    <button class="b" onclick="dlpdf()">📄 PDF</button>
+    <button class="b s" onclick="window.print()">Yazdır</button>
+    <button class="b" onclick="dlpdf()">PDF</button>
   </div>
   <div class="tabs no-p">
-    <div class="tab on" data-t="ozet" onclick="setTab('ozet')">📈 Özet</div>
-    <div class="tab" data-t="urun" onclick="setTab('urun')">🍰 Ürün</div>
-    <div class="tab" data-t="gunluk" onclick="setTab('gunluk')">📅 Günlük</div>
-    <div class="tab" data-t="fatura" onclick="setTab('fatura')">📄 Fatura</div>
+    <div class="tab on" data-t="ozet" onclick="setTab('ozet')">Özet</div>
+    <div class="tab" data-t="urun" onclick="setTab('urun')">Ürün</div>
+    <div class="tab" data-t="gunluk" onclick="setTab('gunluk')">Günlük</div>
+    <div class="tab" data-t="fatura" onclick="setTab('fatura')">Fatura</div>
   </div>
   <div id="stateBar" class="state hide no-p"><span class="dot"></span><span id="stateMsg"></span></div>
   <div id="out"></div>
@@ -159,12 +159,19 @@ async function viewOzet(f){
   const v=await UTL.getReportView(f);
   const fin=v.financial||{}, firm=v.firm||[], urun=v.urun||[];
   if(!firm.length){ return '<div class="empty">Bu dönemde sipariş yok (boş durum).</div>'; }
+  // [KAR-GUARD] maliyet eksik -> kâr gösterme (UTL.getProducts ile türev, RPC/DB değişmez)
+  let eksikM=0; try{ const prods=await UTL.getProducts(); eksikM=(prods||[]).filter(p=>!Number(p.birim_maliyet)).length; }catch(e){ eksikM=0; }
+  const karG=(eksikM===0);
   const topU=urun[0];
   let h='<div class="an-grid">';
   h+=`<div class="an-card"><div class="v">${TL(fin.ciro_haric)}</div><div class="l">Ciro (KDV hariç)</div></div>`;
   h+=`<div class="an-card"><div class="v">${TL(fin.ciro_dahil)}</div><div class="l">Ciro (KDV dahil)</div></div>`;
-  h+=`<div class="an-card"><div class="v gn">${TL(fin.brut_kar)}</div><div class="l">Brüt Kâr</div></div>`;
-  h+=`<div class="an-card"><div class="v ${(+fin.net_kar>=0)?'gn':'rd'}">${TL(fin.net_kar)}</div><div class="l">Net Kâr</div></div>`;
+  if(karG){
+    h+=`<div class="an-card"><div class="v gn">${TL(fin.brut_kar)}</div><div class="l">Brüt Kâr</div></div>`;
+    h+=`<div class="an-card"><div class="v ${(+fin.net_kar>=0)?'gn':'rd'}">${TL(fin.net_kar)}</div><div class="l">Net Kâr</div></div>`;
+  } else {
+    h+=`<div class="an-card" style="grid-column:span 2;border-color:var(--ac)"><div class="v" style="font-size:13px;color:var(--ac)">⚠ Kâr hesaplanamıyor — maliyet eksik (${eksikM} ürün)</div><div class="l">Brüt / Net Kâr gizli</div></div>`;
+  }
   h+=`<div class="an-card"><div class="v">${TL(fin.tahsilat)}</div><div class="l">Tahsilat</div></div>`;
   h+=`<div class="an-card"><div class="v">${topU?esc(topU.urun_ad):'—'}</div><div class="l">En Çok Satan${topU?' ('+AD(topU.toplam_adet)+')':''}</div></div>`;
   h+='</div>';
@@ -194,7 +201,7 @@ async function viewGunluk(f){
   Object.keys(dmap).sort().forEach(t=>{
     const d=new Date(t+'T00:00:00'); const gl=['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'][d.getDay()];
     const tt=dtot[t]||{};
-    h+=`<div class="day-card"><h3>📅 ${String(t).slice(8,10)} ${AY[+String(t).slice(5,7)-1]} ${String(t).slice(0,4)} ${gl}</h3>`;
+    h+=`<div class="day-card"><h3>${String(t).slice(8,10)} ${AY[+String(t).slice(5,7)-1]} ${String(t).slice(0,4)} ${gl}</h3>`;
     h+='<table><tr><th>Ürün</th><th class="n">Adet</th><th class="n">KDV Hariç</th><th class="n">KDV Dahil</th></tr>';
     dmap[t].forEach(r=>{ h+=`<tr><td>${esc(r.urun_ad)}</td><td class="n">${AD(r.toplam_adet)}</td><td class="n">${TL(r.kdv_haric)}</td><td class="n">${TL(r.kdv_dahil)}</td></tr>`; });
     h+=`<tr class="tot"><td>Günlük Toplam</td><td class="n">${AD(tt.toplam_adet)}</td><td class="n">${TL(tt.kdv_haric)}</td><td class="n">${TL(tt.kdv_dahil)}</td></tr></table></div>`;
