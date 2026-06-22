@@ -772,7 +772,7 @@ async function renderRapor(){
   var bar='<div class="card" style="padding:10px 14px"><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">'
     +modes.map(function(md){return '<button class="b'+(_rapMode===md[0]?'':' s')+'" style="flex:1;min-width:54px;padding:7px 4px;font-size:12px" onclick="setRapMode(\''+md[0]+'\')">'+md[1]+'</button>';}).join('')+'</div>'
     +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="date" id="rapBas" value="'+_rapBas+'" style="flex:1"><span style="color:var(--dm)">–</span><input type="date" id="rapBit" value="'+_rapBit+'" style="flex:1"><button class="b s" style="padding:7px 10px" onclick="setRapMode(\'ozel\')">Uygula</button></div>'
-    +'<div style="display:flex;gap:6px;margin-top:8px"><button class="b" style="flex:1" onclick="rapYazdir()">Yazdır</button><button class="b s" style="flex:1" onclick="rapCsv()">CSV</button></div></div>';
+    +'<div style="display:flex;gap:6px;margin-top:8px"><button class="b" style="flex:1" onclick="rapYazdir()">Yazdır</button><button class="b s" style="flex:1" onclick="rapCsv()">CSV</button></div><div style="display:flex;gap:6px;margin-top:6px"><button class="b s" style="flex:1" onclick="rapArsivle()">Arşivle</button><button class="b s" style="flex:1" onclick="rapArsivListe()">Arşiv</button></div></div>';
   var v=await rapVeri(cF,_rapBas,_rapBit);
   window._rapSon=v;
   var donEtiket=v.firmaAd+' · '+trd(v.bas)+' – '+trd(v.bit)+(v.grupTipi==='ay'?' (ay bazlı)':'');
@@ -811,6 +811,34 @@ function rapCsv(){
   var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});var url=URL.createObjectURL(blob);
   var a=document.createElement('a');a.href=url;a.download='firma_rapor_'+(v.firmaAd||'firma').replace(/[^a-z0-9]/gi,'_')+'_'+v.bas+'_'+v.bit+'.csv';
   document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},1000);
+}
+
+// [REPORT-ARCHIVE] rapor snapshot arşivle / listele / göster
+async function rapArsivle(){
+  var v=window._rapSon; if(!v){ alert('Önce rapor yükle'); return; }
+  var ozet={firmaAd:v.firmaAd, bas:v.bas, bit:v.bit, donem:v.donem, urunOzet:v.urunOzet, tahsilatOzet:v.tahsilatOzet, tahsilatBrut:v.tahsilatBrut, acikBakiye:v.acikBakiye};
+  var r=await sb.rpc('rapor_arsivle',{p_firma:cF, p_tip:_rapMode, p_bas:v.bas, p_bit:v.bit, p_ozet:ozet});
+  if(r.error){ alert('Arşivlenemedi: '+((r.error&&r.error.message)||'')); return; }
+  alert('Rapor arşivlendi.');
+}
+async function rapArsivListe(){
+  var r=await sb.from('rapor_arsiv').select('id,tip,donem_bas,donem_bit,olusturma,olusturan_ad,ozet').eq('firma_id',cF).order('olusturma',{ascending:false}).limit(50);
+  if(r.error){ alert('Arşiv okunamadı: '+((r.error&&r.error.message)||'')); return; }
+  var rows=r.data||[]; window._rapArsivData=rows;
+  var h='<div class="mp-h"><h3>Rapor Arşivi</h3><button class="mp-x" onclick="closeMo()">✕</button></div>';
+  if(!rows.length){ h+='<div style="color:var(--dm);font-size:13px;margin-top:6px">Henüz arşivlenmiş rapor yok.</div>'; }
+  else { h+=rows.map(function(a){ var o=a.ozet||{}; var top=(o.donem&&o.donem.dahil)||0; return '<div style="padding:8px 0;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px">'+trd(a.donem_bas)+' – '+trd(a.donem_bit)+' <span style="font-size:11px;color:var(--dm)">('+esc(a.tip||'')+')</span></div><div style="font-size:11px;color:var(--dm)">'+esc(a.olusturan_ad||'')+' · '+trd(a.olusturma)+'</div></div><div style="text-align:right"><b>'+TL(top)+'</b><br><button class="b s" style="font-size:11px;padding:4px 8px;margin-top:4px" onclick="rapArsivGoster(\''+a.id+'\')">Gör</button></div></div>'; }).join(''); }
+  fmOpenMo(h);
+}
+function rapArsivGoster(id){
+  var a=(window._rapArsivData||[]).find(function(x){return x.id===id;}); if(!a) return;
+  var o=a.ozet||{};
+  var h='<div class="mp-h"><h3>'+esc(o.firmaAd||'')+' · '+trd(a.donem_bas)+'–'+trd(a.donem_bit)+'</h3><button class="mp-x" onclick="closeMo()">✕</button></div>';
+  h+='<div class="card"><b>DÖNEM ÜRÜN ÖZETİ</b><table class="rpt"><tr><th>Ürün</th><th class="n">Adet</th><th class="n">KDV Dahil</th></tr>';
+  (o.urunOzet||[]).forEach(function(p){ h+='<tr><td>'+esc(p.urun_ad)+'</td><td class="n">'+AD(p.adet)+'</td><td class="n">'+TL(p.toplam_dahil)+'</td></tr>'; });
+  h+='<tr class="t"><td>TOPLAM</td><td class="n">'+AD((o.donem||{}).adet||0)+'</td><td class="n">'+TL((o.donem||{}).dahil||0)+'</td></tr></table></div>';
+  h+='<div class="card"><div style="display:flex;justify-content:space-between"><b>Tahsilat (brüt)</b><b>'+TL(o.tahsilatBrut||0)+'</b></div><div style="display:flex;justify-content:space-between;margin-top:4px"><b>Açık Bakiye</b><b style="color:var('+((o.acikBakiye||0)>0?'--rd':'--ac')+')">'+TL(o.acikBakiye||0)+'</b></div></div>';
+  fmOpenMo(h);
 }
 
 // ═══ 💰 FİYAT LİSTESİ + GEÇMİŞ + DÜZENLEME ═══
