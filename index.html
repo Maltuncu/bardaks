@@ -771,6 +771,9 @@ async function kaydetSiparis(){
   const dolu = ysSatirlar.filter(function(s){return s.adet>0;});
   if(!dolu.length){ alert('En az bir ürüne adet gir'); return; }
   if(dolu.some(function(s){return !s.urun_id;})){ alert('Katalog dışı ürün var — kaydedilemez. Tüm ürünler master katalogdan seçilmelidir.'); return; }
+  // [NEG-MARGIN] maliyetin altında satış uyarısı (maliyet bilinen ürünlerde)
+  const _zarar=dolu.filter(function(s){var m=Number((URUNLER.find(function(u){return u.id===s.urun_id;})||{}).birim_maliyet)||0; return m>0 && Number(s.fiyat)<m;});
+  if(_zarar.length && !confirm(_zarar.length+' ürün maliyetin ALTINDA satılıyor (zarar): '+_zarar.map(function(s){return s.ad;}).join(', ')+'. Yine de kaydet?')){ return; }
   const kalemler = dolu.map(function(s){return { urun_id:s.urun_id, urun_ad:s.ad, adet:s.adet, birim_fiyat_kdv_haric:s.fiyat, kdv_orani:s.kdv };});
   const r = await sb.rpc('siparis_kaydet', { p_firma:fid, p_tarih:tarih, p_teslim:teslim, p_kalemler:kalemler }); // [ORDER-RPC-1] atomik tek RPC
   if(r.error){ console.error('[siparis] rpc hatası:', r.error); alert('Sipariş kaydedilemedi: '+((r.error&&r.error.message)||'tekrar deneyin')); return; }

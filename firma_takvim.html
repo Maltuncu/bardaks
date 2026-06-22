@@ -1121,7 +1121,7 @@ async function qoRender(tarih){
     (_rgk.data||[]).forEach(function(k){ (_gk[k.siparis_id]=_gk[k.siparis_id]||[]).push(k); }); }
   // BÖLÜM B — firma portföyü
   var port=FY.filter(function(p){return p.firma_id===cF;}).sort(function(a,b){return (a.urun_ad||'').localeCompare(b.urun_ad||'','tr');});
-  window._qoRows=port.map(function(p){return {urun_id:p.urun_id,ad:p.urun_ad,fiyat:+p.birim_fiyat_kdv_haric,kdv:+(p.kdv_orani||1),gramaj:((UR.find(function(u){return u.id===p.urun_id;})||{}).gramaj||''),adet:0};});
+  window._qoRows=port.map(function(p){return {urun_id:p.urun_id,ad:p.urun_ad,fiyat:+p.birim_fiyat_kdv_haric,kdv:+(p.kdv_orani||1),gramaj:((UR.find(function(u){return u.id===p.urun_id;})||{}).gramaj||''),maliyet:+((UR.find(function(u){return u.id===p.urun_id;})||{}).birim_maliyet)||0,adet:0};});
   var h='<div class="mp-h"><h3>'+tarih.slice(8,10)+' '+AY[+tarih.slice(5,7)-1]+' '+gl+'</h3><button class="mp-x" onclick="closeMo();render()">✕</button></div>';
   h+='<div style="color:var(--ac);font-weight:700;margin-bottom:8px">'+esc(fname)+'</div>';
   h+='<div style="font-weight:700;font-size:13px;margin:2px 0 6px">📋 Bu Günün Siparişleri</div>';
@@ -1151,7 +1151,7 @@ async function qoRender(tarih){
 }
 function qoRowsHtml(){
   return (window._qoRows||[]).map(function(s,i){
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--bd)"><div style="flex:1;min-width:0"><div style="font-size:14px">'+esc(s.ad)+(s.gramaj?' <span style="font-size:11px;color:var(--dm)">('+esc(s.gramaj)+')</span>':'')+'</div><div style="font-size:12px;color:var(--dm)">'+TL(s.fiyat)+'/br (KDV hariç) · KDV %'+s.kdv+'</div><div style="font-size:11px;color:var(--dm)" id="qoSat'+i+'"></div></div><input type="number" min="0" step="1" inputmode="numeric" data-qo-idx="'+i+'" style="width:64px;text-align:center" value="'+(s.adet||0)+'" oninput="qoSync(this);qoHesap()" onchange="qoSync(this);qoHesap()"></div>';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--bd)"><div style="flex:1;min-width:0"><div style="font-size:14px">'+esc(s.ad)+(s.gramaj?' <span style="font-size:11px;color:var(--dm)">('+esc(s.gramaj)+')</span>':'')+'</div><div style="font-size:12px;color:var(--dm)">'+TL(s.fiyat)+'/br (KDV hariç) · KDV %'+s.kdv+(s.maliyet>0&&s.fiyat<s.maliyet?' <span style="color:#e05c5c;font-weight:700">⚠ maliyet altı</span>':'')+'</div><div style="font-size:11px;color:var(--dm)" id="qoSat'+i+'"></div></div><input type="number" min="0" step="1" inputmode="numeric" data-qo-idx="'+i+'" style="width:64px;text-align:center" value="'+(s.adet||0)+'" oninput="qoSync(this);qoHesap()" onchange="qoSync(this);qoHesap()"></div>';
   }).join('');
 }
 // P0 DOM-SOURCE FALLBACK: adet'i DOM input'larından tek doğruluk kaynağı olarak oku (state kaybına karşı)
@@ -1172,6 +1172,9 @@ async function qoSave(){
   var dolu=(window._qoRows||[]).filter(function(s){return s.adet>0;});
   if(!dolu.length){ alert('En az bir ürüne adet gir'); return; }
   if(dolu.some(function(s){return !s.urun_id;})){ alert('Yalnızca firma kataloğundaki ürünler eklenebilir'); return; }
+  // [NEG-MARGIN] maliyet altı satış uyarısı
+  var _zarar=dolu.filter(function(s){return s.maliyet>0 && s.fiyat<s.maliyet;});
+  if(_zarar.length && !confirm(_zarar.length+' ürün maliyetin ALTINDA satılıyor (zarar): '+_zarar.map(function(s){return s.ad;}).join(', ')+'. Yine de kaydet?')){ return; }
   // [DUP-GUARD] aynı firma+gün aktif sipariş varsa soft uyarı (D-native, fail-open, hard-block yok)
   try{
     var _dupq=await sb.from('siparisler').select('id').eq('firma_id',cF).eq('tarih',window._qoDay).eq('is_deleted',false).neq('durum','iptal');
