@@ -1182,11 +1182,9 @@ async function qoSave(){
   var btn=document.getElementById('qoSaveBtn'); if(btn){btn.disabled=true;btn.textContent='Kaydediliyor...';}
   var who='Firma Yönetim'; try{ var u=await sb.auth.getUser(); if(u.data&&u.data.user&&u.data.user.email) who=u.data.user.email; }catch(e){}
   // siparisler insert — index.html kaydetSiparis BİREBİR; toplam/kâr/cari ELLE YAZILMAZ (trigger hesaplar)
-  var r=await sb.from('siparisler').insert({firma_id:cF,tarih:window._qoDay,teslim_tarihi:window._qoDay,durum:'bekleyen',created_by:who,last_updated_by:who}).select().single();
-  if(r.error){ if(btn){btn.disabled=false;btn.textContent='Kaydet';} console.error('[qoSave] başlık insert hatası:', r.error); alert('Sipariş kaydedilemedi. Lütfen tekrar deneyin. Sorun sürerse yöneticinize bildirin.'); return; }
-  var kalemler=dolu.map(function(s){return {siparis_id:r.data.id,urun_id:s.urun_id,urun_ad:s.ad,adet:s.adet,birim_fiyat_kdv_haric:s.fiyat,kdv_orani:s.kdv};});
-  var rk=await sb.from('siparis_kalemleri').insert(kalemler);
-  if(rk.error){ if(btn){btn.disabled=false;btn.textContent='Kaydet';} console.error('[qoSave] kalem insert hatası:', rk.error); alert('Sipariş kalemleri kaydedilemedi. Lütfen tekrar deneyin. Sorun sürerse yöneticinize bildirin.'); return; }
+  var kalemler=dolu.map(function(s){return {urun_id:s.urun_id,urun_ad:s.ad,adet:s.adet,birim_fiyat_kdv_haric:s.fiyat,kdv_orani:s.kdv};});
+  var r=await sb.rpc('siparis_kaydet', {p_firma:cF, p_tarih:window._qoDay, p_teslim:window._qoDay, p_kalemler:kalemler}); // [ORDER-RPC-1] atomik tek RPC
+  if(r.error){ if(btn){btn.disabled=false;btn.textContent='Kaydet';} console.error('[qoSave] rpc hatası:', r.error); alert('Sipariş kaydedilemedi: '+((r.error&&r.error.message)||'tekrar deneyin')); return; }
   await qoRender(window._qoDay); // modal açık kalır, mevcut liste yenilenir, adetler sıfırlanır
 }
 function qoNextDay(){ var d=new Date(window._qoDay+'T00:00:00'); d.setDate(d.getDate()+1); openDay(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')); }
