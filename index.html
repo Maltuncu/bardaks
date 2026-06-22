@@ -1712,11 +1712,16 @@ async function renderUrunler(){
   el.innerHTML = '<div class="flex-between mb"><h1 class="page-title">🍰 Ürünler</h1><div class="row" style="gap:6px">'+(CURRENT.rol!=='imalathane'?'<button class="btn" style="background:#25D366" onclick="openFiyatListesi()">📄 Fiyat Listesi</button>':'')+'<button class="btn btn-sec" onclick="openYeniUrun()">+ Yeni Ürün</button></div></div><div class="page-desc">Merkezi ürün kataloğu · Firmalara buradan ürün eklenir</div><div id="urunlerList"><div class="loading">Yükleniyor...</div></div>';
   const r = await sb.from('urunler').select('*').eq('is_deleted',false).order('ad');
   const urunler = r.data || [];
+  // [URUN-NEGMARJ] maliyet-altı firma fiyatı olan ürünler
+  var _FIY=(typeof FIYATLAR!=='undefined'?FIYATLAR:[]);
+  var _negSet={}; _FIY.forEach(function(p){ var _u=urunler.find(function(x){return x.id===p.urun_id;}); if(_u && Number(_u.birim_maliyet)>0 && Number(p.birim_fiyat_kdv_haric)<Number(_u.birim_maliyet)) _negSet[p.urun_id]=1; });
   const list = document.getElementById('urunlerList');
   if(!urunler.length){ list.innerHTML='<div class="empty"><div class="empty-ico">🍰</div>Henüz ürün yok</div>'; return; }
   const gruplar = {};
   urunler.forEach(function(u){ const k=u.kategori||'diger'; if(!gruplar[k]) gruplar[k]=[]; gruplar[k].push(u); });
   let html = '';
+  var _negN=Object.keys(_negSet).length;
+  if(_negN>0) html += '<div class="card" style="border-left:3px solid var(--red);margin-bottom:10px"><div style="color:var(--red);font-weight:700">⚠ '+_negN+' üründe maliyet-altı fiyat (zararına satış)</div><div style="font-size:12px;color:var(--text-dim);margin-top:2px">Kırmızı "maliyet altı" etiketli ürünlerin en az bir firmada fiyatı maliyetin ALTINDA — fiyatları düzelt.</div></div>';
   const sirali = KAT_SIRA.filter(function(k){return gruplar[k];}).concat(Object.keys(gruplar).filter(function(k){return KAT_SIRA.indexOf(k)<0;}));
   sirali.forEach(function(kat){
     html += '<div class="kat-baslik">'+(KAT_ETIKET[kat]||kat)+' <span style="font-size:12px;color:var(--text-dim);font-weight:400">('+gruplar[kat].length+')</span></div><div class="urun-grid">';
@@ -1724,7 +1729,7 @@ async function renderUrunler(){
       const foto = u.gorsel_url ? '<img src="'+u.gorsel_url+'" alt="'+escapeHtml(u.ad)+'">' : '🍰';
       const fiyat = u.varsayilan_fiyat ? TL(u.varsayilan_fiyat) : '<span style="color:var(--text-dim);font-weight:400">fiyat yok</span>';
       const gramaj = u.gramaj ? '<span class="urun-meta">'+escapeHtml(u.gramaj)+'</span>' : '';
-      const rozet = (u.aktif===false?'<span class="tag tag-red" style="margin-left:4px">Pasif</span>':'')+(u.satis_urunu===false?'<span class="tag tag-dim" style="margin-left:4px">Yarı mamul</span>':'');
+      const rozet = (u.aktif===false?'<span class="tag tag-red" style="margin-left:4px">Pasif</span>':'')+(u.satis_urunu===false?'<span class="tag tag-dim" style="margin-left:4px">Yarı mamul</span>':'')+(_negSet[u.id]?'<span class="tag tag-red" style="margin-left:4px">⚠ maliyet altı</span>':'');
       const birimTxt = escapeHtml(u.birim||'adet');
       const maliyetTxt = Number(u.birim_maliyet)>0 ? 'Maliyet '+TL(u.birim_maliyet) : '<span style="color:var(--red)">maliyet yok</span>';
       const eklenme = u.olusturma ? 'Eklendi: '+trDate(u.olusturma) : '';
