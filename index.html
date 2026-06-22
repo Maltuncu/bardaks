@@ -515,6 +515,27 @@ async function renderHome(){
 
   let h = '<h1 class="page-title">Komuta Merkezi</h1><div class="page-desc">'+ayAd+' '+Y+'</div>';
 
+  // [KOMUTA-QUEUE] BUGÜN ÖNCE BUNU YAP — tüm risklerden tek öncelik kuyruğu (en üst)
+  var _q=[];
+  kritikCek.forEach(function(x){ _q.push({p:100, ad:x.firma_ad, ne:'Karşılıksız çek — riski dondur, firmayı ara', v:num(x.acik_bakiye)>0?TL(x.acik_bakiye):'', cta:ctaBtn('Firma 360',"openFirmaDetay('"+x.firma_id+"')"), clr:'--red'}); });
+  if(opGeciken>0) _q.push({p:90, ad:opGeciken+' sipariş teslimi GECİKTİ', ne:gecikenList.slice(0,2).map(function(s){return firmaAdOf(s.firma_id);}).join(', '), v:'', cta:ctaBtn('Operasyon',"showPage('uretim')"), clr:'--red'});
+  if(negatifMarj>0) _q.push({p:85, ad:negatifMarj+' üründe zararına satış', ne:'Fiyat maliyetin altında — düzelt', v:'', cta:ctaBtn('Ürünler',"showPage('urunler')"), clr:'--red'});
+  yapilacak.slice(0,3).forEach(function(x){ _q.push({p:70+num(x.siddet), ad:x.firma_ad, ne:x.aksiyon, v:num(x.acik_bakiye)>0?TL(x.acik_bakiye):'', cta:ctaBtn('Firma 360',"openFirmaDetay('"+x.firma_id+"')"), clr:num(x.siddet)>=4?'--red':'--accent'}); });
+  odemeRisk.slice(0,2).forEach(function(x){ _q.push({p:50, ad:x.firma_ad, ne:'Açık bakiye yüksek — tahsilat zamanı', v:TL(x.acik_bakiye), cta:ctaBtn('Tahsilat',"openTahsilat('"+x.firma_id+"')"), clr:'--accent'}); });
+  _q.sort(function(a,b){return b.p-a.p;});
+  var _top=_q.slice(0,4);
+  if(_top.length){
+    h += '<div class="card" style="border:2px solid var(--accent)"><div class="card-title" style="color:var(--accent);font-size:14px">BUGÜN ÖNCE BUNU YAP</div>'
+      + _top.map(function(it,i){ return '<div class="hm-row" style="align-items:center">'
+          + '<div style="width:22px;height:22px;border-radius:50%;background:var('+it.clr+');color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;margin-right:10px">'+(i+1)+'</div>'
+          + '<div class="hm-main"><div class="hm-name">'+escapeHtml(it.ad)+'</div><div class="hm-sub">'+escapeHtml(it.ne)+'</div></div>'
+          + (it.v?'<div class="hm-val" style="color:var('+it.clr+');margin-right:8px">'+it.v+'</div>':'')
+          + it.cta + '</div>'; }).join('')
+      + '</div>';
+  } else {
+    h += '<div class="card" style="border:2px solid var(--green)"><div class="card-title" style="color:var(--green)">BUGÜN ÖNCE BUNU YAP</div><div class="hm-empty"><span class="ico">✓</span>Acil aksiyon yok — ritim normal</div></div>';
+  }
+
   // 1) ACİL İŞLER
   let acilBody='';
   kritikCek.forEach(function(x){
