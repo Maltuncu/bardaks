@@ -1615,14 +1615,24 @@ async function renderYapilacaklar(){
   }).join('');
 }
 function openYeniYapilacak(){
+  window._yapFile=null;
   openModal('<div class="modal-head"><h3>Yapılacak Ekle</h3><button class="modal-close" onclick="closeModal()">×</button></div>'
     + '<label>Ne yapılacak?</label><textarea id="yapMetin" placeholder="Örn: Greenwich vitrin fotoğrafını çek ve paylaş" style="min-height:90px"></textarea>'
     + '<label>Kime</label><select id="yapAtan"><option value="mudur">Müdür</option><option value="imalathane">İmalathane</option><option value="herkes">Herkes</option></select>'
-    + '<label>Görsel (opsiyonel)</label><input type="file" id="yapGorsel" accept="image/*" onchange="yapGorselOnizle()"><div id="yapOnizle"></div>'
+    + '<label>Görsel (opsiyonel)</label>'
+    + '<input type="file" id="yapGorsel" accept="image/*" capture="environment" onchange="yapDosyaSec(this)" style="display:none">'
+    + '<input type="file" id="yapGorselGaleri" accept="image/*" onchange="yapDosyaSec(this)" style="display:none">'
+    + '<div class="row" style="gap:8px"><button type="button" class="btn btn-sec" style="flex:1;min-height:46px" onclick="document.getElementById(\'yapGorsel\').click()">📷 Fotoğraf Çek</button><button type="button" class="btn btn-sec" style="flex:1;min-height:46px" onclick="document.getElementById(\'yapGorselGaleri\').click()">🖼 Galeriden</button></div>'
+    + '<div id="yapOnizle"></div>'
     + '<button class="btn btn-block mt" id="yapSaveBtn" onclick="kaydetYapilacak()">Kaydet</button>');
 }
+function yapDosyaSec(inp){
+  window._yapFile=(inp.files||[])[0]||null;
+  var other=(inp.id==='yapGorsel')?'yapGorselGaleri':'yapGorsel'; var o=document.getElementById(other); if(o) o.value='';
+  yapGorselOnizle();
+}
 function yapGorselOnizle(){
-  var f=(document.getElementById('yapGorsel').files||[])[0]; var p=document.getElementById('yapOnizle'); if(!p) return;
+  var f=window._yapFile; var p=document.getElementById('yapOnizle'); if(!p) return;
   p.innerHTML = f ? '<img src="'+URL.createObjectURL(f)+'" style="max-width:160px;max-height:160px;border-radius:8px;margin-top:8px;display:block">' : '';
 }
 async function kaydetYapilacak(){
@@ -1631,9 +1641,9 @@ async function kaydetYapilacak(){
   var atan=document.getElementById('yapAtan').value||'mudur';
   var btn=document.getElementById('yapSaveBtn'); if(btn){ btn.disabled=true; btn.textContent='Kaydediliyor...'; }
   var gorsel_url=null;
-  var f=(document.getElementById('yapGorsel').files||[])[0];
+  var f=window._yapFile;
   if(f){
-    var path=CURRENT.id+'/'+Date.now()+'_'+f.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    var path=CURRENT.id+'/'+Date.now()+'_'+(f.name||'foto.jpg').replace(/[^a-zA-Z0-9._-]/g,'_');
     var up=await sb.storage.from('yapilacaklar').upload(path, f, {upsert:false, contentType:f.type});
     if(up.error){ if(btn){btn.disabled=false;btn.textContent='Kaydet';} alert('Görsel yüklenemedi: '+up.error.message); return; }
     gorsel_url=sb.storage.from('yapilacaklar').getPublicUrl(path).data.publicUrl;
