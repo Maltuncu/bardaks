@@ -731,16 +731,19 @@ function setRapMode(mode){
   _rapMode=mode;renderRapor();
 }
 async function rapVeri(firmaId,bas,bit){
-  var firmaAd=(F.find(function(f){return f.id===firmaId;})||{}).ad||'';
+  var _fr=await sb.from('firmalar').select('ad,resmi_unvan,vergi_no,vergi_dairesi,adres').eq('id',firmaId).maybeSingle();
+  var _firma=_fr.data||{};
+  var firmaAd=_firma.ad||(F.find(function(f){return f.id===firmaId;})||{}).ad||'';
   var gunFark=Math.round((new Date(bit)-new Date(bas))/86400000);
   var grupTipi=(gunFark>31)?'ay':'gun';
   var rs=await sb.from('siparisler').select('id,tarih').eq('firma_id',firmaId).eq('is_deleted',false).neq('durum','iptal').gte('tarih',bas).lte('tarih',bit);
   var sips=rs.data||[];var sids=sips.map(function(s){return s.id;});var sipMap={};sips.forEach(function(s){sipMap[s.id]=s.tarih;});
   var kalemler=[];
-  if(sids.length){var rk=await sb.from('siparis_kalemleri').select('siparis_id,urun_ad,adet,birim_fiyat_kdv_haric,toplam_kdv_haric,toplam_kdv_dahil').in('siparis_id',sids).eq('is_deleted',false);kalemler=rk.data||[];}
-  var grupMap={};var urunOzet={};var dA=0,dH=0,dD=0;
+  if(sids.length){var rk=await sb.from('siparis_kalemleri').select('siparis_id,urun_ad,adet,birim_fiyat_kdv_haric,toplam_kdv_haric,toplam_kdv_dahil,kdv_orani').in('siparis_id',sids).eq('is_deleted',false);kalemler=rk.data||[];}
+  var grupMap={};var urunOzet={};var dA=0,dH=0,dD=0;var kdvMap={};
   kalemler.forEach(function(k){
     var t=sipMap[k.siparis_id];if(!t)return;
+    var _or=Number(k.kdv_orani||0); var _km=kdvMap[_or]=kdvMap[_or]||{matrah:0,dahil:0}; _km.matrah+=+k.toplam_kdv_haric; _km.dahil+=+k.toplam_kdv_dahil;
     var anahtar=(grupTipi==='ay')?t.slice(0,7):t;
     var g=grupMap[anahtar]=grupMap[anahtar]||{};
     var pk=g[k.urun_ad]=g[k.urun_ad]||{f:+k.birim_fiyat_kdv_haric,a:0,h:0,d:0};
@@ -760,8 +763,10 @@ async function rapVeri(firmaId,bas,bit){
   var tMap={},tTop=0;(rt.data||[]).forEach(function(x){tMap[x.odeme_tipi]=(tMap[x.odeme_tipi]||0)+ +x.tutar;tTop+=+x.tutar;});
   var rc=await sb.from('cari_ozet').select('kalan_bakiye').eq('firma_id',firmaId);
   var acik=(rc.data&&rc.data[0])?Number(rc.data[0].kalan_bakiye||0):0;
-  return {firmaAd:firmaAd,bas:bas,bit:bit,mode:_rapMode,grupTipi:grupTipi,gruplar:gruplar,
+  return {firmaAd:firmaAd, firmaUnvan:(_firma.resmi_unvan||''), firmaVkn:(_firma.vergi_no||''), firmaVd:(_firma.vergi_dairesi||''), firmaAdres:(_firma.adres||''),
+    bas:bas,bit:bit,mode:_rapMode,grupTipi:grupTipi,gruplar:gruplar,
     urunOzet:Object.entries(urunOzet).sort(function(a,b){return b[1].d-a[1].d;}).map(function(e){return {urun_ad:e[0],adet:e[1].a,toplam_haric:e[1].h,toplam_dahil:e[1].d};}),
+    kdvKirilim:Object.keys(kdvMap).map(function(o){return {oran:Number(o), matrah:kdvMap[o].matrah, kdv:(kdvMap[o].dahil-kdvMap[o].matrah), dahil:kdvMap[o].dahil};}).sort(function(a,b){return a.oran-b.oran;}),
     donem:{adet:dA,haric:dH,dahil:dD},
     tahsilatOzet:Object.entries(tMap).map(function(e){return {odeme_tipi:e[0],brut:e[1]};}),tahsilatBrut:tTop,acikBakiye:acik};
 }
@@ -772,11 +777,15 @@ async function renderRapor(){
   var bar='<div class="card" style="padding:10px 14px"><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">'
     +modes.map(function(md){return '<button class="b'+(_rapMode===md[0]?'':' s')+'" style="flex:1;min-width:54px;padding:7px 4px;font-size:12px" onclick="setRapMode(\''+md[0]+'\')">'+md[1]+'</button>';}).join('')+'</div>'
     +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="date" id="rapBas" value="'+_rapBas+'" style="flex:1"><span style="color:var(--dm)">–</span><input type="date" id="rapBit" value="'+_rapBit+'" style="flex:1"><button class="b s" style="padding:7px 10px" onclick="setRapMode(\'ozel\')">Uygula</button></div>'
-    +'<div style="display:flex;gap:6px;margin-top:8px"><button class="b" style="flex:1" onclick="rapYazdir()">Yazdır</button><button class="b s" style="flex:1" onclick="rapCsv()">CSV</button></div><div style="display:flex;gap:6px;margin-top:6px"><button class="b s" style="flex:1" onclick="rapArsivle()">Arşivle</button><button class="b s" style="flex:1" onclick="rapArsivListe()">Arşiv</button></div></div>';
+    +'<div style="display:flex;gap:6px;margin-top:8px"><button class="b" style="flex:1" onclick="rapYazdir()">📄 PDF / Yazdır</button><button class="b s" style="flex:1" onclick="rapCsv()">CSV</button></div><div style="display:flex;gap:6px;margin-top:6px"><button class="b s" style="flex:1" onclick="rapArsivle()">Arşivle</button><button class="b s" style="flex:1" onclick="rapArsivListe()">Arşiv</button></div></div>';
   var v=await rapVeri(cF,_rapBas,_rapBit);
   window._rapSon=v;
   var donEtiket=v.firmaAd+' · '+trd(v.bas)+' – '+trd(v.bit)+(v.grupTipi==='ay'?' (ay bazlı)':'');
-  var h=bar+'<div id="rapPrint"><div class="card" style="text-align:center"><b>'+esc(donEtiket)+'</b></div>';
+  var h=bar+'<div id="rapPrint">'
+    + '<div class="card"><div style="font-weight:800;font-size:15px">'+esc(v.firmaUnvan||v.firmaAd)+'</div>'
+    + '<div style="font-size:12px;color:var(--dm);margin-top:2px">'+(v.firmaVkn?('VKN/TCKN: '+esc(v.firmaVkn)):'VKN: —')+(v.firmaVd?(' · Vergi D.: '+esc(v.firmaVd)):'')+'</div>'
+    + (v.firmaAdres?('<div style="font-size:12px;color:var(--dm)">'+esc(v.firmaAdres)+'</div>'):'')
+    + '<div style="font-size:12px;color:var(--dm);margin-top:4px">Dönem: '+esc(trd(v.bas))+' – '+esc(trd(v.bit))+(v.grupTipi==='ay'?' (ay bazlı)':'')+'</div></div>';
   if(!v.gruplar.length){h+='<div class="card" style="text-align:center;color:var(--dm)">Bu dönemde sipariş yok.</div>';}
   else{
     v.gruplar.forEach(function(g){
@@ -787,6 +796,12 @@ async function renderRapor(){
     h+='<div class="card"><b>DÖNEM ÜRÜN ÖZETİ</b><table class="rpt"><tr><th>Ürün</th><th class="n">Adet</th><th class="n">KDV Hariç</th><th class="n">KDV Dahil</th></tr>';
     v.urunOzet.forEach(function(p){h+='<tr><td>'+esc(p.urun_ad)+'</td><td class="n">'+AD(p.adet)+'</td><td class="n">'+TL(p.toplam_haric)+'</td><td class="n">'+TL(p.toplam_dahil)+'</td></tr>';});
     h+='<tr class="t"><td>TOPLAM</td><td class="n">'+AD(v.donem.adet)+'</td><td class="n">'+TL(v.donem.haric)+'</td><td class="n">'+TL(v.donem.dahil)+'</td></tr></table></div>';
+  }
+  if(v.kdvKirilim && v.kdvKirilim.length){
+    var _tm=0,_tk=0,_td=0;
+    h+='<div class="card"><b>KDV KIRILIMI (FATURA)</b><table class="rpt"><tr><th>KDV %</th><th class="n">Matrah (hariç)</th><th class="n">KDV Tutarı</th><th class="n">Toplam (dahil)</th></tr>';
+    v.kdvKirilim.forEach(function(x){ _tm+=x.matrah;_tk+=x.kdv;_td+=x.dahil; h+='<tr><td>%'+x.oran+'</td><td class="n">'+TL(x.matrah)+'</td><td class="n">'+TL(x.kdv)+'</td><td class="n">'+TL(x.dahil)+'</td></tr>'; });
+    h+='<tr class="t"><td>GENEL TOPLAM</td><td class="n">'+TL(_tm)+'</td><td class="n">'+TL(_tk)+'</td><td class="n">'+TL(_td)+'</td></tr></table></div>';
   }
   h+='<div class="card"><b>TAHSİLAT ÖZETİ</b><table class="rpt"><tr><th>Ödeme Tipi</th><th class="n">Brüt Tutar</th></tr>';
   if(v.tahsilatOzet.length){v.tahsilatOzet.forEach(function(x){h+='<tr><td>'+esc(x.odeme_tipi)+'</td><td class="n">'+TL(x.brut)+'</td></tr>';});}
