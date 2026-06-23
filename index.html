@@ -893,22 +893,22 @@ async function renderUretim(){
     var bekle = _bekleK(bt);
     var ged = (s.teslim_tarihi||s.tarih) < bugunStr;
     var aksiyon = s.durum==='bekleyen'
-      ? '<button class="btn btn-sm" style="width:100%;min-height:46px" onclick="durumDegistir(\''+s.id+'\',\'uretimde\')">▶ Üretime Al</button>'
+      ? '<button class="btn btn-sm" style="width:100%;min-height:46px" onclick="durumDegistir(\''+s.id+'\',\'uretimde\')">Üretime Al</button>'
       : (s.durum==='uretimde'
-        ? '<button class="btn btn-sm" style="width:100%;min-height:46px" onclick="durumDegistir(\''+s.id+'\',\'hazir\')">✓ Hazır</button>'
+        ? '<button class="btn btn-sm" style="width:100%;min-height:46px" onclick="durumDegistir(\''+s.id+'\',\'hazir\')">Hazır</button>'
         : '<span class="tag tag-blue" style="display:block;text-align:center;padding:11px 0">Müdür sevk/fatura</span>');
     var brd = onceBu ? 'border-color:var(--accent);border-width:2px'
       : (ged?'border-color:var(--red);border-width:2px':(s.okunmamis_not?'border-color:var(--blue);border-width:2px':''));
     return '<div class="card" style="padding:11px;margin-bottom:8px;'+brd+'">'
-      + (onceBu?'<div style="display:inline-block;background:var(--accent);color:#1a1208;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;margin-bottom:6px">⭐ ÖNCE BU</div>':'')
+      + (onceBu?'<div style="display:inline-block;background:var(--accent);color:#1a1208;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;margin-bottom:6px">ÖNCE BU</div>':'')
       + '<div class="flex-between" style="align-items:flex-start"><strong style="font-size:14px;line-height:1.3">'+(f.ad||'?')+'</strong><span style="font-size:18px;font-weight:800;color:var(--accent);white-space:nowrap">'+_adK(toplamAdet)+'<span style="font-size:11px;color:var(--text-dim);font-weight:400"> adet</span></span></div>'
       + '<div style="font-size:12px;color:var(--text-dim);margin:5px 0;line-height:1.4">'+(ilk2||'kalem yok')+'</div>'
       + '<div style="display:flex;justify-content:space-between;font-size:11px;color:'+(ged?'var(--red)':'var(--text-dim)')+';margin-bottom:8px">'
-        + '<span>📅 '+trDate(s.teslim_tarihi||s.tarih)+(ged?' · GECİKTİ':'')+'</span>'
-        + (bekle?'<span>⏱ '+bekle+'</span>':'<span></span>')
+        + '<span>'+trDate(s.teslim_tarihi||s.tarih)+(ged?' · GECİKTİ':'')+'</span>'
+        + (bekle?'<span>'+bekle+' bekliyor</span>':'<span></span>')
       + '</div>'
       + aksiyon
-      + '<div class="row" style="gap:6px;margin-top:6px"><button class="btn btn-sec btn-sm" style="flex:1" onclick="openUretimDetay(\''+s.id+'\')">Aç</button><button class="btn btn-sec btn-sm" onclick="openSohbet(\''+s.id+'\')">💬'+(s.okunmamis_not?' •':'')+'</button></div>'
+      + '<div class="row" style="gap:6px;margin-top:6px"><button class="btn btn-sec btn-sm" style="flex:1" onclick="openUretimDetay(\''+s.id+'\')">Aç</button><button class="btn btn-sec btn-sm" onclick="openSohbet(\''+s.id+'\')">Not'+(s.okunmamis_not?' •':'')+'</button></div>'
       + '</div>';
   }
   var kol = {bekleyen:[],uretimde:[],hazir:[]};
@@ -916,7 +916,7 @@ async function renderUretim(){
   kol.bekleyen.sort(function(a,b){ return String(a.olusturma||a.tarih||'').localeCompare(String(b.olusturma||b.tarih||'')); });
   kol.uretimde.sort(function(a,b){ return String(a.uretimde_at||'').localeCompare(String(b.uretimde_at||'')); });
   kol.hazir.sort(function(a,b){ return String(a.hazir_at||'').localeCompare(String(b.hazir_at||'')); });
-  var kolMeta = [['bekleyen','🕒 Bekleyen','var(--text)'],['uretimde','🔥 Üretimde','var(--accent)'],['hazir','✅ Hazır','var(--blue)']];
+  var kolMeta = [['bekleyen','Bekleyen','var(--text)'],['uretimde','Üretimde','var(--accent)'],['hazir','Hazır','var(--blue)']];
   var h = '<div class="flex-between mb"><h1 class="page-title">Üretim</h1>'+uretimToggleHtml()+'</div><div class="page-desc">'+trDate(bugunStr)+' · '+siparisler.length+' aktif · öncelik soldan sağa, en üst kart önce</div>';
   h += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px"><div style="display:grid;grid-auto-flow:column;grid-auto-columns:minmax(250px,1fr);gap:10px;align-items:start">';
   kolMeta.forEach(function(m){
@@ -931,7 +931,7 @@ async function renderUretim(){
   el.innerHTML = h;
 }
 function uretimToggleHtml(){
-  return '<div class="pill-tabs" style="margin:0"><div class="pill '+(uretimGorunum==='pulse'?'active':'')+'" style="min-height:44px;display:flex;align-items:center" onclick="uretimGorunum=\'pulse\';renderUretim()">📦 Ürün</div><div class="pill '+(uretimGorunum==='liste'?'active':'')+'" style="min-height:44px;display:flex;align-items:center" onclick="uretimGorunum=\'liste\';renderUretim()">📋 Kanban</div></div>';
+  return '<div class="pill-tabs" style="margin:0"><div class="pill '+(uretimGorunum==='pulse'?'active':'')+'" style="min-height:44px;display:flex;align-items:center" onclick="uretimGorunum=\'pulse\';renderUretim()">Ürün</div><div class="pill '+(uretimGorunum==='liste'?'active':'')+'" style="min-height:44px;display:flex;align-items:center" onclick="uretimGorunum=\'liste\';renderUretim()">Kanban</div></div>';
 }
 function renderUretimPulse(el, siparisler, kalemler){
   const bugunStr = today();
@@ -959,7 +959,17 @@ function renderUretimPulse(el, siparisler, kalemler){
     if(!u.firmalar[fad]) u.firmalar[fad]=[];
     u.firmalar[fad].push({adet:Number(k.adet||0), teslim:(s.teslim_tarihi||s.tarih), isaretli:!!k.uretildi_at, sid:s.id});
   });
-  const liste=Object.keys(urunler).map(function(k){return urunler[k];}).filter(function(u){return u.kalan>0;}).sort(function(a,b){return b.kalan-a.kalan;});
+  const liste=Object.keys(urunler).map(function(k){return urunler[k];}).filter(function(u){return u.kalan>0;});
+  // [UR-ACIL-1] her ürün için en yakın (üretilmemiş) teslim + aciliyet katmanı (0 geciken,1 bugün,2 ileri)
+  liste.forEach(function(u){
+    var minT=null;
+    Object.keys(u.firmalar).forEach(function(fad){ u.firmalar[fad].forEach(function(r){ if(r.isaretli) return; if(minT===null || String(r.teslim)<String(minT)) minT=r.teslim; }); });
+    u.enYakinTeslim=minT;
+    u.tier=(minT===null)?2:(String(minT)<bugunStr?0:(String(minT)===bugunStr?1:2));
+  });
+  liste.sort(function(a,b){ if(a.tier!==b.tier) return a.tier-b.tier; var at=String(a.enYakinTeslim||'9999-99-99'), bt=String(b.enYakinTeslim||'9999-99-99'); if(at!==bt) return at<bt?-1:1; return b.kalan-a.kalan; });
+  var yukToplam=0, yukGeciken=0, yukBugun=0;
+  liste.forEach(function(u){ yukToplam+=u.kalan; if(u.tier===0) yukGeciken+=u.kalan; else if(u.tier===1) yukBugun+=u.kalan; });
 
   let h = '<div class="flex-between mb"><h1 class="page-title">Üretim</h1>'+uretimToggleHtml()+'</div><div class="page-desc">'+trDate(bugunStr)+' · ürün bazlı</div>';
   const sayac=function(lbl,val,col){ return '<div class="stat" style="padding:12px"><div class="stat-label">'+lbl+'</div><div class="stat-value" style="font-size:22px;color:var('+col+')">'+val+'</div></div>'; };
@@ -969,17 +979,31 @@ function renderUretimPulse(el, siparisler, kalemler){
     + sayac('Üretimde', opUretimde, '--text')
     + sayac('Hazır-Sevk', opHazir, opHazir>0?'--green':'--text')
     + '</div>';
+  if(liste.length){ h += '<div class="card" style="padding:11px 14px;margin-bottom:10px;display:flex;gap:16px;flex-wrap:wrap;align-items:baseline">'
+    + '<span style="font-size:13px;color:var(--text-dim)">Bugünkü üretim yükü</span>'
+    + '<span style="font-size:16px;font-weight:800">'+yukToplam+' adet</span>'
+    + (yukGeciken>0?'<span style="font-size:14px;color:var(--red);font-weight:800">Geciken '+yukGeciken+'</span>':'')
+    + (yukBugun>0?'<span style="font-size:14px;color:var(--accent);font-weight:800">Bugün teslim '+yukBugun+'</span>':'')
+    + '<span style="font-size:13px;color:var(--text-dim)">'+liste.length+' ürün</span>'
+    + '</div>'; }
   if(hazirIsaretsiz>0){ h += '<div class="card" style="padding:9px 14px;border-color:var(--yellow)"><span style="font-size:13px;color:var(--yellow)">⚠ '+hazirIsaretsiz+' hazır siparişte işaretsiz kalem var (sonradan kalem eklenmiş olabilir)</span></div>'; }
   if((CURRENT.rol==='admin'||CURRENT.rol==='mudur') && _uuLastBatch){
     h += '<div style="text-align:right;margin:-4px 0 8px"><button class="btn btn-sec btn-sm" style="min-height:44px" onclick="uuGeriAl()">↩ Son işareti geri al</button></div>';
   }
   if(!liste.length){
-    h += '<div class="empty"><div class="empty-ico">🏭</div>Üretilecek ürün yok'+(opHazir>0?' — '+opHazir+' sipariş sevk bekliyor':'')+'</div>';
+    h += '<div class="empty"><div class="empty-ico" style="color:var(--green)">✓</div>Üretilecek ürün yok'+(opHazir>0?' — '+opHazir+' sipariş sevk bekliyor':'')+'</div>';
   } else {
     liste.forEach(function(u){
       const btnId='uu-btn-'+(u.uid||'x');
       const kismi = u.uretilen>0 ? '<span class="tag tag-yellow" style="margin-left:8px">'+u.uretilen+'/'+u.toplam+' üretildi</span>' : '';
       const sipSay=Object.keys(u.sipSet).length, firmaSay=Object.keys(u.firmalar).length;
+      var tcol = u.tier===0?'var(--red)':(u.tier===1?'var(--accent)':'var(--text-dim)');
+      var tlabel;
+      if(u.enYakinTeslim==null){ tlabel='teslim tarihi yok'; }
+      else if(u.tier===0){ var _g=Math.round((new Date(bugunStr).getTime()-new Date(u.enYakinTeslim).getTime())/86400000); tlabel='GECİKTİ'+(_g>0?' · '+_g+' gün':''); }
+      else if(u.tier===1){ tlabel='BUGÜN teslim'; }
+      else { tlabel=trDate(u.enYakinTeslim)+' teslim'; }
+      var brd = u.tier===0?';border-color:var(--red);border-width:2px':(u.tier===1?';border-color:var(--accent)':'');
       const detay=Object.keys(u.firmalar).map(function(fad){
         return u.firmalar[fad].map(function(r){
           const s=sipMap[r.sid];
@@ -987,10 +1011,11 @@ function renderUretimPulse(el, siparisler, kalemler){
           return '<div class="flex-between" style="padding:8px 0;border-bottom:1px solid var(--border);font-size:14px"><span>'+escapeHtml(fad)+' <span style="color:var(--text-dim);font-size:12px">· teslim '+trDate(r.teslim)+(s&&s.durum==='uretimde'?' · üretimde':'')+'</span></span><span style="white-space:nowrap"><b>'+r.adet+'</b> '+(r.isaretli?'<span class="tag tag-green">✓</span>':(baskaEksik>0?'<span class="tag tag-dim" title="siparişin diğer ürünleri de bekliyor">+'+baskaEksik+' kalem</span>':''))+'</span></div>';
         }).join('');
       }).join('');
-      h += '<div class="card" style="padding:14px;margin-bottom:10px">'
+      h += '<div class="card" style="padding:14px;margin-bottom:10px'+brd+'">'
+        + '<div style="display:inline-block;font-size:11px;font-weight:800;color:'+tcol+';border:1px solid '+tcol+';border-radius:6px;padding:2px 8px;margin-bottom:8px">'+tlabel+'</div>'
         + '<div class="flex-between" style="gap:10px;flex-wrap:wrap">'
         +   '<div style="min-width:0"><div style="font-size:17px;font-weight:700">'+escapeHtml(u.ad)+kismi+'</div>'
-        +   '<div style="font-size:13px;color:var(--text-dim);margin-top:2px">Kalan <b style="font-size:20px;color:var(--accent)">'+u.kalan+'</b> adet · '+firmaSay+' firma · '+sipSay+' sipariş</div></div>'
+        +   '<div style="font-size:13px;color:var(--text-dim);margin-top:2px">Kalan <b style="font-size:22px;color:'+tcol+'">'+u.kalan+'</b> adet · '+firmaSay+' firma · '+sipSay+' sipariş</div></div>'
         +   (u.uid?'<button class="btn" id="'+btnId+'" style="min-height:48px;min-width:150px;font-size:15px" onclick="uuTap(\''+u.uid+'\',\''+escapeHtml(u.ad).replace(/'/g,"\\'")+'\')">✓ Üretildi</button>'
                  :'<button class="btn btn-sec" style="min-height:48px" disabled title="katalog dışı kalem">—</button>')
         + '</div>'
