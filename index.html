@@ -759,9 +759,10 @@ async function renderSiparis(){
     return '<div class="card" style="'+(s.okunmamis_not?'border-color:var(--blue)':'')+'"><div class="flex-between"><div><strong>'+(f.ad||'?')+'</strong><span class="tag '+durumTag(s.durum)+'" style="margin-left:8px">'+durumAd(s.durum)+'</span>'+(s.kilitli?'<span class="tag tag-dim" style="margin-left:4px">🔒</span>':'')+'</div><span style="color:var(--text-dim); font-size:13px">'+trDate(s.tarih)+'</span></div><div class="flex-between mt"><span style="color:var(--text-dim); font-size:13px">'+(s.siparis_no||'')+' · '+TL(s.toplam_kdv_dahil)+'</span><div class="row" style="gap:6px"><button class="btn btn-sec btn-sm" onclick="openSiparisDetay(\''+s.id+'\')">Detay</button><button class="btn btn-sec btn-sm" onclick="openSohbet(\''+s.id+'\')">💬</button></div></div></div>';
   }).join('');
 }
-function openYeniSiparis(){
+function openYeniSiparis(onDate){
+  var _d = onDate || today(); // [TAKVIM-FIRST] güne dokununca tarih öne-dolu
   const firmaOpts = FIRMALAR.map(function(f){return '<option value="'+f.id+'">'+f.ad+'</option>';}).join('');
-  openModal('<div class="modal-head"><h3>Yeni Sipariş</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Firma</label><select id="ysFirma" onchange="ysLoadUrunler()">'+firmaOpts+'</select><label>Sipariş Tarihi</label><input type="date" id="ysTarih" value="'+today()+'"><label class="mt">Teslim Tarihi</label><input type="date" id="ysTeslim" value="'+today()+'"><div id="ysUrunler" class="mt"></div><div id="ysFooter" style="position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);padding:12px 0 4px;margin-top:8px"><div id="ysToplam" style="font-weight:800;font-size:20px;text-align:right;margin-bottom:8px"></div><button class="btn btn-block" style="font-size:16px;padding:14px;min-height:48px" onclick="kaydetSiparis()">Siparişi Kaydet</button></div>');
+  openModal('<div class="modal-head"><h3>Yeni Sipariş</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Firma</label><select id="ysFirma" onchange="ysLoadUrunler()">'+firmaOpts+'</select><label>Sipariş Tarihi</label><input type="date" id="ysTarih" value="'+_d+'"><label class="mt">Teslim Tarihi</label><input type="date" id="ysTeslim" value="'+_d+'"><div id="ysUrunler" class="mt"></div><div id="ysFooter" style="position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);padding:12px 0 4px;margin-top:8px"><div id="ysToplam" style="font-weight:800;font-size:20px;text-align:right;margin-bottom:8px"></div><button class="btn btn-block" style="font-size:16px;padding:14px;min-height:48px" onclick="kaydetSiparis()">Siparişi Kaydet</button></div>');
   ysLoadUrunler();
 }
 var ysSatirlar = [];
@@ -1649,7 +1650,7 @@ async function silSohbetMesaj(id){
 
 // ===== TAKVİM GÖRÜNÜMÜ (Sipariş ekranı için) =====
 let takvimAy = new Date();
-let siparisGorunum = 'liste';
+let siparisGorunum = 'takvim'; // [TAKVIM-FIRST] sipariş ekranı doğrudan ay takvimiyle açılır
 
 async function renderTakvim(){
   const el = document.getElementById('page-siparis');
@@ -1699,6 +1700,7 @@ async function acGunDetay(tarih){
   const r = await sb.from('siparisler').select('*').eq('tarih',tarih).eq('is_deleted',false).order('siparis_no');
   const sips = r.data || [];
   let html = '<div class="modal-head"><h3>'+trDate(tarih)+'</h3><button class="modal-close" onclick="closeModal()">×</button></div>';
+  html += '<button class="btn btn-block" style="margin-bottom:10px;font-size:15px;padding:12px;min-height:46px" onclick="closeModal();openYeniSiparis(\''+tarih+'\')">➕ Bu güne sipariş</button>'; // [TAKVIM-FIRST]
   if(!sips.length){
     html += '<div class="empty">Bu gün sipariş yok</div>';
   } else {
