@@ -1594,7 +1594,7 @@ async function renderYapilacaklar(){
   const list = document.getElementById('yapList'); if(!list) return;
   if(r.error){ list.innerHTML='<div class="empty">Hata: '+escapeHtml(r.error.message)+'</div>'; return; }
   if(!r.data || !r.data.length){ list.innerHTML='<div class="empty"><div class="empty-ico" style="color:var(--green)">✓</div>Yapılacak yok</div>'; return; }
-  const rolEt = {mudur:'Müдür', imalathane:'İmalathane', herkes:'Herkes'};
+  const rolEt = {mudur:'Müdür', imalathane:'İmalathane', herkes:'Herkes'};
   list.innerHTML = r.data.map(function(y){
     const done = y.durum==='yapildi';
     const tik = done
@@ -1617,7 +1617,7 @@ async function renderYapilacaklar(){
 function openYeniYapilacak(){
   openModal('<div class="modal-head"><h3>Yapılacak Ekle</h3><button class="modal-close" onclick="closeModal()">×</button></div>'
     + '<label>Ne yapılacak?</label><textarea id="yapMetin" placeholder="Örn: Greenwich vitrin fotoğrafını çek ve paylaş" style="min-height:90px"></textarea>'
-    + '<label>Kime</label><select id="yapAtan"><option value="mudur">Müдür</option><option value="imalathane">İmalathane</option><option value="herkes">Herkes</option></select>'
+    + '<label>Kime</label><select id="yapAtan"><option value="mudur">Müdür</option><option value="imalathane">İmalathane</option><option value="herkes">Herkes</option></select>'
     + '<label>Görsel (opsiyonel)</label><input type="file" id="yapGorsel" accept="image/*" onchange="yapGorselOnizle()"><div id="yapOnizle"></div>'
     + '<button class="btn btn-block mt" id="yapSaveBtn" onclick="kaydetYapilacak()">Kaydet</button>');
 }
