@@ -338,7 +338,7 @@ function buildNav(){
   if(CURRENT.rol==='imalathane'){
     items = [{id:'uretim', ico:'🏭', label:'Üretim'},{id:'urunler', ico:'🍰', label:'Ürünler'},{id:'gunozeti', ico:'📋', label:'Notlar'}];
   } else {
-    items = [{id:'home', ico:'🏠', label:'Komuta'},{id:'panel', ico:'💰', label:'Finans'},{id:'siparis', ico:'🧾', label:'Sipariş'},{id:'urunler', ico:'🍰', label:'Ürünler'},{id:'sohbet', ico:'📡', label:'Pano'},{id:'firmalar', ico:'🏢', label:'Firmalar'},{id:'analiz', ico:'📈', label:'Analiz'},{id:'gunozeti', ico:'📋', label:'Gün Özeti'}]; // [FINANS-MERGE] Panel+Finans→tek Finans
+    items = [{id:'home', ico:'🏠', label:'Komuta'},{id:'panel', ico:'💰', label:'Finans'},{id:'siparis', ico:'🧾', label:'Sipariş'},{id:'urunler', ico:'🍰', label:'Ürünler'},{id:'sohbet', ico:'✅', label:'Yapılacaklar'},{id:'firmalar', ico:'🏢', label:'Firmalar'},{id:'analiz', ico:'📈', label:'Analiz'},{id:'gunozeti', ico:'📋', label:'Gün Özeti'}]; // [FINANS-MERGE] Panel+Finans→tek Finans
   }
   nav.innerHTML = items.map(function(i){
     const badge = i.id==='sohbet' ? '<span class="nav-badge hidden" id="sohbetBadge">0</span>' : '';
@@ -359,7 +359,7 @@ function showPage(id){
   if(id==='firmalar') renderFirmalar();
   if(id==='analiz') renderAnaliz();
   if(id==='gunozeti') renderGunOzeti();
-  if(id==='sohbet') renderSohbet();
+  if(id==='sohbet') renderYapilacaklar(); // [YAPILACAKLAR] Pano slotu → Yapılacaklar
   if(id==='urunler') renderUrunler();
   if(id==='finans') renderFinans();
 }
@@ -1579,14 +1579,85 @@ setInterval(function(){ if(CURRENT && !document.hidden) refreshSohbetBadge(); },
 // ===== EKİP SOHBET =====
 async function refreshSohbetBadge(){
   if(!CURRENT) return;
-  const ro = await sb.from('sohbet_okunma').select('son_okuma').eq('kullanici_id',CURRENT.id).maybeSingle();
-  const sonOkuma = ro.data ? ro.data.son_okuma : '1970-01-01';
-  const rm = await sb.from('ekip_sohbet').select('id',{count:'exact',head:true}).gt('olusturma',sonOkuma).neq('yazan_id',CURRENT.id).eq('silindi',false);
+  const rm = await sb.from('yapilacaklar').select('id',{count:'exact',head:true}).eq('durum','bekliyor').eq('is_deleted',false); // [YAPILACAKLAR] rozet = bekleyen
   const n = rm.count || 0;
   const b = document.getElementById('sohbetBadge');
   if(b){ b.textContent=n; b.classList.toggle('hidden',n===0); }
 }
 
+// ============ YAPILACAKLAR (yönetici görsel+yazı → ekip yeşil tik) ============
+async function renderYapilacaklar(){
+  const el = document.getElementById('page-sohbet');
+  const yon = (CURRENT.rol==='admin');
+  el.innerHTML = '<div class="flex-between mb"><h1 class="page-title">Yapılacaklar</h1>'+(yon?'<button class="btn" onclick="openYeniYapilacak()">+ Ekle</button>':'')+'</div><div id="yapList"><div class="loading">Yükleniyor...</div></div>';
+  const r = await sb.from('yapilacaklar').select('*').eq('is_deleted',false).order('durum',{ascending:true}).order('olusturma',{ascending:false}).limit(100);
+  const list = document.getElementById('yapList'); if(!list) return;
+  if(r.error){ list.innerHTML='<div class="empty">Hata: '+escapeHtml(r.error.message)+'</div>'; return; }
+  if(!r.data || !r.data.length){ list.innerHTML='<div class="empty"><div class="empty-ico" style="color:var(--green)">✓</div>Yapılacak yok</div>'; return; }
+  const rolEt = {mudur:'Müдür', imalathane:'İmalathane', herkes:'Herkes'};
+  list.innerHTML = r.data.map(function(y){
+    const done = y.durum==='yapildi';
+    const tik = done
+      ? '<div style="flex:0 0 auto;width:38px;height:38px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800">✓</div>'
+      : '<button onclick="yapilacakYaptim(\''+y.id+'\')" title="Yaptım" style="flex:0 0 auto;width:42px;height:42px;border-radius:50%;border:2px solid var(--accent);background:transparent;cursor:pointer;font-size:18px;color:var(--accent)">○</button>';
+    const img = y.gorsel_url ? '<img src="'+escapeHtml(y.gorsel_url)+'" onclick="window.open(this.src,\'_blank\')" style="max-width:150px;max-height:150px;border-radius:8px;margin-top:8px;cursor:pointer;display:block">' : '';
+    const altBilgi = done
+      ? '<span style="color:var(--green)">✓ '+escapeHtml(y.yapan_ad||'?')+' · '+new Date(y.yapildi_at).toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span>'
+      : '<span style="color:var(--text-dim)">'+escapeHtml(rolEt[y.atanan_rol]||y.atanan_rol)+' · bekliyor</span>';
+    const adminAks = yon ? '<div class="row" style="gap:6px;margin-top:8px">'+(done?'<button class="btn btn-sec btn-sm" onclick="yapilacakGeriAl(\''+y.id+'\')">↩ Geri Al</button>':'')+'<button class="btn btn-sec btn-sm" onclick="yapilacakSil(\''+y.id+'\')">🗑️ Sil</button></div>' : '';
+    return '<div class="card" style="display:flex;gap:12px;align-items:flex-start;border-left:4px solid var('+(done?'--green':'--accent')+')">'
+      + tik
+      + '<div style="flex:1;min-width:0"><div style="font-size:15px;white-space:pre-wrap;'+(done?'opacity:.65':'')+'">'+escapeHtml(y.metin)+'</div>'
+      + img
+      + '<div style="font-size:11px;color:var(--text-dim);margin-top:6px">'+escapeHtml(y.veren_ad||'')+' · '+new Date(y.olusturma).toLocaleDateString('tr-TR')+' · '+altBilgi+'</div>'
+      + adminAks
+      + '</div></div>';
+  }).join('');
+}
+function openYeniYapilacak(){
+  openModal('<div class="modal-head"><h3>Yapılacak Ekle</h3><button class="modal-close" onclick="closeModal()">×</button></div>'
+    + '<label>Ne yapılacak?</label><textarea id="yapMetin" placeholder="Örn: Greenwich vitrin fotoğrafını çek ve paylaş" style="min-height:90px"></textarea>'
+    + '<label>Kime</label><select id="yapAtan"><option value="mudur">Müдür</option><option value="imalathane">İmalathane</option><option value="herkes">Herkes</option></select>'
+    + '<label>Görsel (opsiyonel)</label><input type="file" id="yapGorsel" accept="image/*" onchange="yapGorselOnizle()"><div id="yapOnizle"></div>'
+    + '<button class="btn btn-block mt" id="yapSaveBtn" onclick="kaydetYapilacak()">Kaydet</button>');
+}
+function yapGorselOnizle(){
+  var f=(document.getElementById('yapGorsel').files||[])[0]; var p=document.getElementById('yapOnizle'); if(!p) return;
+  p.innerHTML = f ? '<img src="'+URL.createObjectURL(f)+'" style="max-width:160px;max-height:160px;border-radius:8px;margin-top:8px;display:block">' : '';
+}
+async function kaydetYapilacak(){
+  var metin=(document.getElementById('yapMetin').value||'').trim();
+  if(!metin){ alert('Bir şeyler yaz'); return; }
+  var atan=document.getElementById('yapAtan').value||'mudur';
+  var btn=document.getElementById('yapSaveBtn'); if(btn){ btn.disabled=true; btn.textContent='Kaydediliyor...'; }
+  var gorsel_url=null;
+  var f=(document.getElementById('yapGorsel').files||[])[0];
+  if(f){
+    var path=CURRENT.id+'/'+Date.now()+'_'+f.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    var up=await sb.storage.from('yapilacaklar').upload(path, f, {upsert:false, contentType:f.type});
+    if(up.error){ if(btn){btn.disabled=false;btn.textContent='Kaydet';} alert('Görsel yüklenemedi: '+up.error.message); return; }
+    gorsel_url=sb.storage.from('yapilacaklar').getPublicUrl(path).data.publicUrl;
+  }
+  var r=await sb.from('yapilacaklar').insert({metin:metin, gorsel_url:gorsel_url, veren_id:CURRENT.id, veren_ad:CURRENT.ad_soyad, atanan_rol:atan});
+  if(r.error){ if(btn){btn.disabled=false;btn.textContent='Kaydet';} alert('Kaydedilemedi: '+r.error.message); return; }
+  closeModal(); toast('✅ Yapılacak eklendi',''); renderYapilacaklar(); refreshSohbetBadge();
+}
+async function yapilacakYaptim(id){
+  var r=await sb.rpc('yapilacak_yapildi',{p_id:id});
+  if(r.error){ toast('⛔ İşaretlenemedi', r.error.message); return; }
+  toast('✅ Yapıldı',''); renderYapilacaklar(); refreshSohbetBadge();
+}
+async function yapilacakGeriAl(id){
+  var r=await sb.rpc('yapilacak_geri_al',{p_id:id});
+  if(r.error){ toast('⛔ Geri alınamadı', r.error.message); return; }
+  renderYapilacaklar();
+}
+async function yapilacakSil(id){
+  if(!confirm('Bu yapılacağı sil?')) return;
+  var r=await sb.from('yapilacaklar').update({is_deleted:true}).eq('id',id);
+  if(r.error){ toast('⛔ Silinemedi', r.error.message); return; }
+  renderYapilacaklar(); refreshSohbetBadge();
+}
 async function renderSohbet(){
   const el = document.getElementById('page-sohbet');
   el.innerHTML = '<h1 class="page-title">📡 Aktivite Panosu</h1><div class="page-desc">Sistemdeki son hareketler</div><div id="panoList"><div class="loading">Yükleniyor...</div></div>';
