@@ -68,11 +68,7 @@
     document.body.appendChild(rov);
 
     // "Yönet" butonlarını override et — firma kartına tıklayınca overlay açılsın
-    window.openFirmaDetay = function(fid){
-      var f=document.getElementById('fy-frame');
-      f.src='firma_takvim.html?firma='+fid;
-      document.getElementById('fy-ov').classList.add('open');
-    };
+    window.openFirmaDetay = function(fid){ location.href='firma_takvim.html?firma='+fid; }; // [FIRMA360-FULLPAGE] iframe→tam-sayfa (mobil oturum paylaşımı)
   }
 
   function open(){ document.getElementById('nb-ov').classList.add('open'); render('netkar'); }

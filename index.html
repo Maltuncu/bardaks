@@ -828,7 +828,7 @@ async function openSiparisDetay(sid){
     if(CURRENT.rol==='admin') acts += '<button class="btn btn-danger btn-sm" onclick="siparisSil(\''+sid+'\')">🗑️ Sil</button>';
     h += '<div class="row mt" style="flex-wrap:wrap;gap:6px">'+acts+'</div>';
   }
-  if(s.kilitli && CURRENT.rol==='admin'){ h += '<button class="btn btn-danger btn-block mt" onclick="kilitAc(\''+sid+'\')">🔓 Kilidi Aç</button>'; }
+  if(s.kilitli && (CURRENT.rol==='admin'||CURRENT.rol==='mudur')){ h += '<button class="btn btn-danger btn-block mt" onclick="kilitAc(\''+sid+'\')">🔓 Kilidi Aç</button>'; } // [MUD-EDIT] müдür de kilit açıp düzenleyebilir
   openModal(h);
 }
 async function kilitAc(sid){
@@ -1192,27 +1192,9 @@ async function kaydetFirma(){
 }
 const val = id => document.getElementById(id).value.trim()||null;
 async function openFirmaDetay(fid){
-  // [YONET-FIX] Firma 360 overlay'i her durumda aç; eski fiyat modalini bypass et (override gecikse/yuklenmese bile)
-  try{
-    var _ov=document.getElementById('fy-ov');
-    if(!_ov){
-      _ov=document.createElement('div'); _ov.id='fy-ov';
-      _ov.style.cssText='position:fixed;inset:0;z-index:9500;background:#0f1115;display:flex;flex-direction:column';
-      var _bar=document.createElement('div');
-      _bar.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:#181b22;border-bottom:1px solid #2a2f3a';
-      var _t=document.createElement('b'); _t.textContent='Firma Yonetim'; _t.style.color='#d4a04f';
-      var _x=document.createElement('button'); _x.textContent='X Kapat';
-      _x.style.cssText='background:none;border:none;color:#e8eaed;font-size:18px;cursor:pointer';
-      _x.onclick=function(){ var o=document.getElementById('fy-ov'); if(o) o.remove(); };
-      _bar.appendChild(_t); _bar.appendChild(_x);
-      var _ifr=document.createElement('iframe'); _ifr.id='fy-frame';
-      _ifr.style.cssText='flex:1;border:none;width:100%;background:#0f1115';
-      _ov.appendChild(_bar); _ov.appendChild(_ifr);
-      document.body.appendChild(_ov);
-    } else { _ov.style.display='flex'; _ov.classList.add('open'); }
-    document.getElementById('fy-frame').src='firma_takvim.html?firma='+fid;
-    return;
-  }catch(e){ console.warn('openFirmaDetay YONET-FIX', e); }
+  // [FIRMA360-FULLPAGE] iframe yerine tam-sayfa — iframe mobilde Supabase oturumunu kaybediyordu (Bakiye 000). Tam-sayfa = ana uygulamayla aynı bağlam, oturum paylaşılır.
+  location.href='firma_takvim.html?firma='+fid;
+  return;
   const f=FIRMALAR.find(function(x){return x.id===fid;})||{};
   const fiyatlar=FIYATLAR.filter(function(p){return p.firma_id===fid;});
   const tanimliUrunIds = fiyatlar.map(function(p){return p.urun_id;});
