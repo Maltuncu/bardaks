@@ -825,7 +825,7 @@ async function openSiparisDetay(sid){
     if(s.durum==='faturalandi') acts += '<button class="btn btn-sm" onclick="durumIlerlet(\''+sid+'\',\'tahsil_edildi\')">💵 Tahsil Edildi</button>';
     if(s.durum==='tahsil_edildi') acts += '<button class="btn btn-sm" onclick="durumIlerlet(\''+sid+'\',\'tamamlandi\')">✓ Tamamla</button>';
     acts += '<button class="btn btn-sec btn-sm" onclick="closeModal();openSohbet(\''+sid+'\')">💬</button>';
-    if(CURRENT.rol==='admin') acts += '<button class="btn btn-danger btn-sm" onclick="siparisSil(\''+sid+'\')">🗑️ Sil</button>';
+    if(CURRENT.rol==='admin'||CURRENT.rol==='mudur') acts += '<button class="btn btn-danger btn-sm" onclick="siparisSil(\''+sid+'\')">🗑️ Sil</button>'; // [MUD-EDIT] müдür de silebilir (soft-delete)
     h += '<div class="row mt" style="flex-wrap:wrap;gap:6px">'+acts+'</div>';
   }
   if(s.kilitli && (CURRENT.rol==='admin'||CURRENT.rol==='mudur')){ h += '<button class="btn btn-danger btn-block mt" onclick="kilitAc(\''+sid+'\')">🔓 Kilidi Aç</button>'; } // [MUD-EDIT] müдür de kilit açıp düzenleyebilir
