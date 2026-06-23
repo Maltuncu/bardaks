@@ -493,8 +493,8 @@ async function renderHome(){
   const negatifMarj = Object.keys(negSet).length;
   const karGuvenilir = (eksikMaliyet===0);
   // operasyon
-  let opTeslim=0, opGeciken=0, opUretimde=0; const gecikenList=[];
-  aktifSips.forEach(function(s){ const t=(s.teslim_tarihi||s.tarih); if(t<bugunStr){ opGeciken++; gecikenList.push(s);} else if(t===bugunStr) opTeslim++; if(s.durum==='uretimde') opUretimde++; });
+  let opTeslim=0, opGeciken=0, opUretimde=0, opHazir=0; const gecikenList=[];
+  aktifSips.forEach(function(s){ const t=(s.teslim_tarihi||s.tarih); if(t<bugunStr){ opGeciken++; gecikenList.push(s);} else if(t===bugunStr) opTeslim++; if(s.durum==='uretimde') opUretimde++; if(s.durum==='hazir') opHazir++; });
   // pulse
   const kritikCek = pulse.filter(function(x){return x.risk_sinif==='kritik_cek';}).sort(function(a,b){return num(b.oncelik_skoru)-num(a.oncelik_skoru);});
   const yapilacak = pulse.filter(function(x){return x.aksiyon && num(x.siddet)>=2 && x.risk_sinif!=='kritik_cek';}).sort(function(a,b){return num(b.oncelik_skoru)-num(a.oncelik_skoru);}).slice(0,5);
@@ -519,7 +519,7 @@ async function renderHome(){
   var _q=[];
   kritikCek.forEach(function(x){ _q.push({p:100, ad:x.firma_ad, ne:'Karşılıksız çek — riski dondur, firmayı ara', v:num(x.acik_bakiye)>0?TL(x.acik_bakiye):'', cta:ctaBtn('Firma 360',"openFirmaDetay('"+x.firma_id+"')"), clr:'--red'}); });
   if(opGeciken>0) _q.push({p:90, ad:opGeciken+' sipariş teslimi GECİKTİ', ne:gecikenList.slice(0,2).map(function(s){return firmaAdOf(s.firma_id);}).join(', '), v:'', cta:ctaBtn('Operasyon',"showPage('uretim')"), clr:'--red'});
-  if(negatifMarj>0) _q.push({p:85, ad:negatifMarj+' üründe zararına satış', ne:'Fiyat maliyetin altında — düzelt', v:'', cta:ctaBtn('Ürünler',"showPage('urunler')"), clr:'--red'});
+  if(negatifMarj>0 && CURRENT.rol==='admin') _q.push({p:85, ad:negatifMarj+' üründe zararına satış', ne:'Fiyat maliyetin altında — düzelt', v:'', cta:ctaBtn('Ürünler',"showPage('urunler')"), clr:'--red'}); // [MUD-V2] fiyat=admin; müдürde dead-end
   yapilacak.slice(0,3).forEach(function(x){ _q.push({p:70+num(x.siddet), ad:x.firma_ad, ne:x.aksiyon, v:num(x.acik_bakiye)>0?TL(x.acik_bakiye):'', cta:ctaBtn('Firma 360',"openFirmaDetay('"+x.firma_id+"')"), clr:num(x.siddet)>=4?'--red':'--accent'}); });
   odemeRisk.slice(0,2).forEach(function(x){ _q.push({p:50, ad:x.firma_ad, ne:'Açık bakiye yüksek — tahsilat zamanı', v:TL(x.acik_bakiye), cta:ctaBtn('Tahsilat',"openTahsilat('"+x.firma_id+"')"), clr:'--accent'}); });
   _q.sort(function(a,b){return b.p-a.p;});
@@ -567,15 +567,17 @@ async function renderHome(){
   h += sect('TAHSİLAT RİSKLERİ', (bekCek>0||odemeRisk.length)?'uyari':'ok', tahBody);
 
   // 4) OPERASYON RİSKLERİ
-  let opBody = line('Bugün teslim: '+opTeslim+'  ·  Geciken: '+opGeciken+'  ·  Üretimde: '+opUretimde, '', '', opGeciken>0?'--red':'--text');
-  h += sect('OPERASYON RİSKLERİ', opGeciken>0?'kritik':'bilgi', opBody, ctaBtn('Operasyona Git',"showPage('uretim')"));
+  let opBody = line('Bugün teslim: '+opTeslim+'  ·  Geciken: '+opGeciken+'  ·  Üretimde: '+opUretimde+'  ·  Hazır/sevk: '+opHazir, '', '', opGeciken>0?'--red':(opHazir>0?'--accent':'--text')); // [MUD-V2] sevk handoff görünür
+  h += sect(CURRENT.rol==='mudur'?'SEVK / OPERASYON':'OPERASYON RİSKLERİ', opGeciken>0?'kritik':(opHazir>0?'uyari':'bilgi'), opBody, ctaBtn('Operasyona Git',"showPage('uretim')"));
 
-  // 5) KÂRLILIK RİSKLERİ
-  let karBody='';
-  if(eksikMaliyet>0) karBody += line(eksikMaliyet+' üründe maliyet eksik', 'Kâr güvenilmez — gösterilmiyor', '', '--accent');
-  if(negatifMarj>0) karBody += line(negatifMarj+' üründe negatif marj', 'Zararına satış — fiyat/maliyet düzelt', '', '--red');
-  if(!karBody) karBody = okBox('Kârlılık riski yok — maliyetler tam');
-  h += sect('KÂRLILIK RİSKLERİ', negatifMarj>0?'kritik':(eksikMaliyet>0?'uyari':'ok'), karBody, eksikMaliyet>0?ctaBtn('Maliyetleri Gir',"openMaliyetEksik()"):'');
+  // 5) KÂRLILIK RİSKLERİ — [MUD-V2] fiyat/maliyet=admin işi; müдürde gizli (gürültü + dead-end)
+  if(CURRENT.rol==='admin'){
+    let karBody='';
+    if(eksikMaliyet>0) karBody += line(eksikMaliyet+' üründe maliyet eksik', 'Kâr güvenilmez — gösterilmiyor', '', '--accent');
+    if(negatifMarj>0) karBody += line(negatifMarj+' üründe negatif marj', 'Zararına satış — fiyat/maliyet düzelt', '', '--red');
+    if(!karBody) karBody = okBox('Kârlılık riski yok — maliyetler tam');
+    h += sect('KÂRLILIK RİSKLERİ', negatifMarj>0?'kritik':(eksikMaliyet>0?'uyari':'ok'), karBody, eksikMaliyet>0?ctaBtn('Maliyetleri Gir',"openMaliyetEksik()"):'');
+  }
 
   // 6) FİNANSAL ÖZET (en alt)
   const karGoster = karGuvenilir ? TL(ayK) : '<span style="color:var(--accent)">⚠ Kâr hesaplanamıyor — maliyet eksik</span>';
