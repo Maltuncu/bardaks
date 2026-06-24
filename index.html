@@ -839,7 +839,7 @@ async function openSiparisDetay(sid){
   openModal(h);
 }
 async function kilitAc(sid){
-  if(!confirm('Bu siparişin kilidini açmak istediğine emin misin?')) return;
+  if(!confirm('⚠ Bu sipariş FATURALANDI/kilitli. Kilidi açıp düzenlersen kesilen FATURA ile uyumsuz olur (cari/muhasebe tutmaz). Yine de açılsın mı?')) return; // [MUD-FATURA-GUARD]
   await sb.from('siparisler').update({kilitli:false, last_updated_by:CURRENT.ad_soyad}).eq('id',sid);
   toast('🔓 Kilit açıldı','');
   closeModal(); renderSiparis();
@@ -1100,7 +1100,13 @@ async function siparisIptal(sid){
   toast('Sipariş iptal edildi',''); closeModal(); renderSiparis();
 }
 async function siparisSil(sid){
-  if(!confirm('Bu sipariş silinsin mi? (Veri korunur, geri alınabilir)')) return;
+  // [MUD-FATURA-GUARD] faturalı/kilitli siparişte güçlü uyarı (fatura-sipariş desync önle)
+  const _sg = (await sb.from('siparisler').select('durum,kilitli,siparis_no,fatura_id').eq('id',sid).single()).data||{};
+  if(_sg.kilitli || _sg.durum==='faturalandi' || _sg.fatura_id){
+    if(!confirm('⚠ DİKKAT: Bu sipariş FATURALANDI/kilitli'+(_sg.siparis_no?(' ('+_sg.siparis_no+')'):'')+'.\nSilmek, kesilen FATURA ile siparişi uyumsuz bırakır (cari/muhasebe tutmaz).\nYine de silinsin mi?')) return;
+  } else {
+    if(!confirm('Bu sipariş silinsin mi? (Veri korunur, geri alınabilir)')) return;
+  }
   const r = await sb.from('siparisler').update({is_deleted:true, deleted_at:new Date().toISOString(), deleted_by:CURRENT.ad_soyad, last_updated_by:CURRENT.ad_soyad}).eq('id',sid);
   if(r.error){ alert('Hata: '+r.error.message); return; }
   toast('🗑️ Silindi',''); closeModal(); renderSiparis();
