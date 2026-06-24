@@ -1581,19 +1581,32 @@ async function yedekDurumGoster(){
   el.innerHTML='Son yedek: '+trDate(t.slice(0,10))+' ('+gun+' gün önce)'+(gun>7?' <span style="color:var(--red)">— güncelle!</span>':' <span style="color:var(--green)">✓</span>');
 }
 async function yedekAl(){
-  toast('💾 Yedek hazırlanıyor...','');
-  const t = await Promise.all([
-    sb.from('firmalar').select('*'), sb.from('urunler').select('*'),
-    sb.from('firma_urun_fiyat').select('*'), sb.from('siparisler').select('*'),
-    sb.from('siparis_kalemleri').select('*'), sb.from('tahsilatlar').select('*'),
-    sb.from('faturalar').select('*'), sb.from('expenses').select('*')
-  ]);
-  const data={ tarih:new Date().toISOString(), firmalar:t[0].data, urunler:t[1].data, firma_urun_fiyat:t[2].data, siparisler:t[3].data, siparis_kalemleri:t[4].data, tahsilatlar:t[5].data, faturalar:t[6].data, expenses:t[7].data };
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  // [YEDEK-V2] TAM snapshot: tüm iş tabloları + sayfalama (1000-satır limitini aşar). bildirimler (efemeral) hariç.
+  toast('💾 TAM yedek hazırlanıyor...','Tüm tablolar çekiliyor');
+  const TABLOLAR = ['firmalar','urunler','firma_urun_fiyat','siparisler','siparis_kalemleri','siparis_ek_maliyet','siparis_durum_log','siparis_notlari','tahsilatlar','faturalar','expenses','accounts','financial_transactions','firma_odemeleri','gecmis_aylik_ozet','urun_maliyet_gecmisi','firma_urun_log','firma_gorusmeleri','gun_ozetleri','yapilacaklar','rapor_arsiv','teklifler','teklif_kalemleri','ayarlar','batch_records','kullanicilar','state_history','audit_logs','ekip_sohbet','mesajlar','sohbet_okunma'];
+  async function _hepsi(tbl){
+    var out=[], from=0; const PAGE=1000;
+    while(true){
+      var r=await sb.from(tbl).select('*').range(from, from+PAGE-1);
+      if(r.error) throw new Error(r.error.message);
+      var rows=r.data||[]; out=out.concat(rows);
+      if(rows.length<PAGE) break;
+      from+=PAGE;
+    }
+    return out;
+  }
+  var data={ _meta:{ tarih:new Date().toISOString(), surum:'TAM-v2', alan:CURRENT.ad_soyad } };
+  var hatalar=[], toplamSatir=0;
+  for(var i=0;i<TABLOLAR.length;i++){
+    try{ var rows=await _hepsi(TABLOLAR[i]); data[TABLOLAR[i]]=rows; toplamSatir+=rows.length; }
+    catch(e){ hatalar.push(TABLOLAR[i]+': '+(e.message||e)); data[TABLOLAR[i]]=null; }
+  }
+  data._meta.toplam_satir=toplamSatir; data._meta.atlanan=hatalar;
+  const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
   const url=URL.createObjectURL(blob); const a=document.createElement('a');
-  a.href=url; a.download='bardaks_yedek_'+today()+'.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  a.href=url; a.download='bardaks_TAM_yedek_'+today()+'.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   await sb.from('ayarlar').upsert({anahtar:'son_yedek_tarihi', deger:today(), aciklama:'Son yedek tarihi'}, {onConflict:'anahtar'});
-  toast('✅ Yedek indirildi', today());
+  toast('✅ TAM yedek indirildi', (TABLOLAR.length-hatalar.length)+'/'+TABLOLAR.length+' tablo · '+toplamSatir+' satır'+(hatalar.length?' ('+hatalar.length+' atlandı)':''));
   yedekDurumGoster();
 }
 setInterval(function(){ if(CURRENT && !document.hidden) refreshNotifs(); }, 30000);
