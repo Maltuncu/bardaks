@@ -114,3 +114,6 @@ body { background: var(--ux-bg) !important; -webkit-font-smoothing: antialiased;
   .nav-item .nav-ico{ font-size: 17px; }
   #nb-fab, #ub-fab{ font-size: 11px !important; padding: 7px 11px !important; }
 }
+
+/* ---- Login marka logosu: dengeli orantı (230 -> 300) ---- */
+.brand-logo{ width: 300px !important; max-width: 80vw !important; }
