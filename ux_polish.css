@@ -7,10 +7,10 @@
 
 :root{
   --ux-brand:#1e5ba8;     /* Bardaks logo accent */
-  --ux-bg:#eef1f5;        /* neutral calm panel */
+  --ux-bg:#FAF6E9;        /* Bardaks krem — marka zemini */
   --ux-surface:#ffffff;
-  --ux-border:#e2e6ec;
-  --ux-muted:#6b7b8f;
+  --ux-border:#E7DFCB;    /* sıcak kenarlık (krem ailesi) */
+  --ux-muted:#6B7686;
   --ux-ink:#1a2b40;
 }
 
@@ -53,7 +53,7 @@ body { background: var(--ux-bg) !important; -webkit-font-smoothing: antialiased;
 .btn{ border-radius: 8px !important; min-height: 38px; font-weight: 600; transition: filter .12s ease, box-shadow .12s ease; }
 .btn:hover{ filter: brightness(.97); }
 .btn:focus-visible{ outline: 2px solid var(--ux-brand); outline-offset: 2px; }
-.btn-sec{ background: #f1f4f8 !important; color: #33445c !important; border: 1px solid var(--ux-border) !important; }
+.btn-sec{ background: #F6F1E3 !important; color: #33445c !important; border: 1px solid var(--ux-border) !important; }
 .btn-sm{ min-height: 30px; }
 
 /* ---- Tables: numeric readability + calm header ---- */
