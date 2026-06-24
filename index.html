@@ -1862,9 +1862,9 @@ const KAT_SIRA = ['cup','pasta','kruvasan','magnolia','diger'];
 async function renderUrunler(){
   const el = document.getElementById('page-urunler');
   el.innerHTML = '<div class="flex-between mb"><h1 class="page-title">🍰 Ürünler</h1><div class="row" style="gap:6px">'+(CURRENT.rol!=='imalathane'?'<button class="btn" style="background:#25D366" onclick="openFiyatListesi()">📄 Fiyat Listesi</button>':'')+'<button class="btn btn-sec" onclick="openYeniUrun()">+ Yeni Ürün</button></div></div><div class="page-desc">Merkezi ürün kataloğu · Firmalara buradan ürün eklenir</div><div id="urunlerList"><div class="loading">Yükleniyor...</div></div>';
-  const r = await sb.from('urunler').select('*').eq('is_deleted',false).order('ad');
+  const r = await sb.from('v_urun_core').select('*').eq('is_deleted',false).order('ad'); // [HARDEN-2d] maliyet/fiyat maskeli (imalathane null)
   const urunler = r.data || [];
-  // [URUN-NEGMARJ] maliyet-altı firma fiyatı olan ürünler
+  // [URUN-NEGMARJ] maliyet-altı firma fiyatı olan ürünler (admin/müдürde maliyet dolu)
   var _FIY=(typeof FIYATLAR!=='undefined'?FIYATLAR:[]);
   var _negSet={}; _FIY.forEach(function(p){ var _u=urunler.find(function(x){return x.id===p.urun_id;}); if(_u && Number(_u.birim_maliyet)>0 && Number(p.birim_fiyat_kdv_haric)<Number(_u.birim_maliyet)) _negSet[p.urun_id]=1; });
   const list = document.getElementById('urunlerList');
