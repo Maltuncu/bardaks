@@ -43,13 +43,7 @@
     +'.nb-input,.nb-sel{width:100%;padding:9px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;margin:4px 0;font-size:13px;box-sizing:border-box}'
     +'.nb-dim{color:#94a3b8;font-size:12px}.nb-pos{color:#22c55e}.nb-neg{color:#ef4444}'
     +'.nb-pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;background:#334155}'
-    +'.nb-close{float:right;background:none;border:none;color:#94a3b8;font-size:24px;cursor:pointer;line-height:1}'
-    +'#fy-ov{position:fixed;inset:0;z-index:9500;background:#0f1115;display:none;flex-direction:column}'
-    +'#fy-ov.open{display:flex}'
-    +'#fy-ov .fy-bar{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:#181b22;border-bottom:1px solid #2a2f3a;flex-shrink:0}'
-    +'#fy-ov .fy-bar b{font-size:16px;color:#d4a04f}'
-    +'#fy-ov .fy-x{background:none;border:none;color:#e8eaed;font-size:22px;cursor:pointer;padding:4px 10px}'
-    +'#fy-ov iframe{flex:1;border:none;width:100%;background:#0f1115}';
+    +'.nb-close{float:right;background:none;border:none;color:#94a3b8;font-size:24px;cursor:pointer;line-height:1}'; // [TEMIZLIK] fy-ov iframe stilleri kaldırıldı (Firma 360 tam-sayfa)
     var s=document.createElement('style'); s.textContent=css; document.head.appendChild(s);
   }
 
@@ -61,14 +55,8 @@
     o.addEventListener('click',function(e){ if(e.target===o) close(); });
     document.body.appendChild(o);
 
-    // Firma Yönetim Overlay (Yönet butonlarından açılır)
-    var rov=document.createElement('div'); rov.id='fy-ov';
-    rov.innerHTML='<div class="fy-bar"><b>Firma Yönetim</b><button class="fy-x" onclick="document.getElementById(\'fy-ov\').classList.remove(\'open\')">✕ Kapat</button></div>'
-      +'<iframe id="fy-frame" src="about:blank"></iframe>';
-    document.body.appendChild(rov);
-
-    // "Yönet" butonlarını override et — firma kartına tıklayınca overlay açılsın
-    window.openFirmaDetay = function(fid){ location.href='firma_takvim.html?firma='+fid; }; // [FIRMA360-FULLPAGE] iframe→tam-sayfa (mobil oturum paylaşımı)
+    // [TEMIZLIK] Eski fy-ov iframe overlay kaldırıldı — Firma 360 tam-sayfa açılıyor
+    window.openFirmaDetay = function(fid){ location.href='firma_takvim.html?firma='+fid; }; // [FIRMA360-FULLPAGE] mobil oturum paylaşımı
   }
 
   function open(){ document.getElementById('nb-ov').classList.add('open'); render('netkar'); }

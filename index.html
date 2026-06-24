@@ -379,7 +379,7 @@ function toast(title, body){
 async function loadCoreData(){
   const r = await Promise.all([
     sb.from('firmalar').select('*').eq('aktif',true).order('ad'),
-    sb.from('urunler').select('*').eq('aktif',true).order('ad'),
+    sb.from('v_urun_core').select('*').eq('aktif',true).order('ad'), // [HARDEN-2d] maliyet/fiyat auth_rol ile maskeli (imalathane null)
     sb.from('aktif_firma_fiyatlari').select('*')
   ]);
   FIRMALAR = r[0].data||[]; URUNLER = r[1].data||[]; FIYATLAR = r[2].data||[];
