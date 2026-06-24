@@ -1718,34 +1718,82 @@ async function yapilacakSil(id){
 }
 // ============ FİRMA ÖDEMELERİ (Özet > Ödemeler) — memo, kasa/gider DEĞİL ============
 window._foPeriod = window._foPeriod || 'ay';
+function _foNorm(s){ return (s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+var _foAylar=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+function _foDupSet(items){
+  var dup={};
+  for(var i=0;i<items.length;i++){ for(var j=i+1;j<items.length;j++){
+    if(Number(items[i].tutar)===Number(items[j].tutar)){
+      var d1=new Date(items[i].tarih), d2=new Date(items[j].tarih);
+      if(Math.abs((d1-d2)/86400000)<=3){ dup[items[i].id]=1; dup[items[j].id]=1; }
+    }
+  }}
+  return dup;
+}
 async function ozetOdemeIcerik(c){
   if(!c) return;
-  var now=new Date(); var bas = (window._foPeriod==='yil') ? now.getFullYear()+'-01-01' : now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-01';
-  var r=await sb.from('firma_odemeleri').select('*').eq('is_deleted',false).gte('tarih',bas).order('tarih',{ascending:false}).limit(200);
+  var r=await sb.from('firma_odemeleri').select('*').eq('is_deleted',false).order('tarih',{ascending:false}).limit(1000);
   if(r.error){ c.innerHTML='<div class="empty">Hata: '+escapeHtml(r.error.message)+'</div>'; return; }
-  var rows=r.data||[]; var toplam=rows.reduce(function(s,x){return s+Number(x.tutar||0);},0);
-  var h='<div class="flex-between mb"><div class="pill-tabs" style="margin:0"><div class="pill '+(window._foPeriod==='ay'?'active':'')+'" onclick="window._foPeriod=\'ay\';ozetOdemeIcerik(document.getElementById(\'ozetIcerik\'))">Bu Ay</div><div class="pill '+(window._foPeriod==='yil'?'active':'')+'" onclick="window._foPeriod=\'yil\';ozetOdemeIcerik(document.getElementById(\'ozetIcerik\'))">Bu Yıl</div></div><button class="btn btn-sm" onclick="openFirmaOdeme()">+ Ödeme</button></div>';
-  h+='<div class="card" style="display:flex;justify-content:space-between;align-items:center"><span style="color:var(--text-dim);font-size:13px">'+(window._foPeriod==='yil'?'Yıl':'Ay')+' toplam ödeme</span><strong style="font-size:20px;color:var(--red)">'+TL(toplam)+'</strong></div>';
-  if(!rows.length){ h+='<div class="empty">Ödeme kaydı yok</div>'; }
-  else { h+=rows.map(function(x){return '<div class="card" style="padding:11px 13px"><div class="flex-between"><div style="min-width:0"><strong>'+escapeHtml(x.firma_ad)+'</strong>'+(x.aciklama?'<div style="font-size:12px;color:var(--text-dim)">'+escapeHtml(x.aciklama)+'</div>':'')+'<div style="font-size:11px;color:var(--text-dim)">'+trDate(x.tarih)+(x.giren_ad?' · '+escapeHtml(x.giren_ad):'')+'</div></div><div style="text-align:right;flex:0 0 auto"><div style="font-weight:700;color:var(--red)">'+TL(x.tutar)+'</div><button class="btn btn-sec btn-sm" style="margin-top:4px" onclick="silFirmaOdeme(\''+x.id+'\')">Sil</button></div></div></div>';}).join(''); }
+  var rows=r.data||[];
+  var firms={};
+  rows.forEach(function(x){ var k=_foNorm(x.firma_ad); if(!firms[k]) firms[k]={ad:x.firma_ad,key:k,items:[],toplam:0}; firms[k].items.push(x); firms[k].toplam+=Number(x.tutar||0); });
+  var list=Object.keys(firms).map(function(k){return firms[k];});
+  list.forEach(function(f){ f.son=f.items[0]?f.items[0].tarih:''; });
+  list.sort(function(a,b){return (b.son||'').localeCompare(a.son||'');});
+  var yil=String(new Date().getFullYear());
+  var yilTop=rows.filter(function(x){return (x.tarih||'').slice(0,4)===yil;}).reduce(function(s,x){return s+Number(x.tutar||0);},0);
+  var h='<div class="flex-between mb"><strong style="font-size:13px;color:var(--text-dim)">'+yil+' toplam: <span style="color:var(--red)">'+TL(yilTop)+'</span></strong><button class="btn btn-sm" onclick="openFirmaOdeme()">+ Ödeme</button></div>';
+  if(!list.length){ h+='<div class="empty">Henüz ödeme kaydı yok</div>'; c.innerHTML=h; return; }
+  h+=list.map(function(f){
+    var acik=(window._foOpen===f.key);
+    var head='<div class="card" style="padding:0;overflow:hidden;margin-bottom:10px"><div class="flex-between" style="padding:12px 14px;cursor:pointer" onclick="_foToggle(\''+encodeURIComponent(f.key)+'\')"><div style="min-width:0"><strong>'+escapeHtml(f.ad)+'</strong><div style="font-size:11px;color:var(--text-dim)">'+f.items.length+' ödeme · son '+trDate(f.son)+'</div></div><div style="text-align:right;flex:0 0 auto"><div style="font-weight:800;color:var(--red)">'+TL(f.toplam)+'</div><div style="font-size:11px;color:var(--text-dim)">'+(acik?'▲':'▼')+'</div></div></div>';
+    var body='';
+    if(acik){
+      var dup=_foDupSet(f.items);
+      var byM={}; f.items.forEach(function(x){ var m=(x.tarih||'').slice(0,7); (byM[m]=byM[m]||[]).push(x); });
+      body='<div style="border-top:1px solid var(--border);padding:4px 14px 12px">';
+      Object.keys(byM).sort().reverse().forEach(function(m){
+        var mt=byM[m].reduce(function(s,x){return s+Number(x.tutar||0);},0);
+        body+='<div style="display:flex;justify-content:space-between;margin:10px 0 2px;font-size:12px;font-weight:700;color:var(--accent)"><span>'+(_foAylar[parseInt(m.slice(5,7),10)-1]||'')+' '+m.slice(0,4)+'</span><span>'+TL(mt)+'</span></div>';
+        byM[m].forEach(function(x){
+          body+='<div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border)"><div style="min-width:0"><span style="font-size:13px">'+trDate(x.tarih)+'</span>'+(dup[x.id]?' <span class="tag tag-red">⚠ olası tekrar</span>':'')+(x.aciklama?'<div style="font-size:11px;color:var(--text-dim)">'+escapeHtml(x.aciklama)+'</div>':'')+'</div><div style="text-align:right;flex:0 0 auto"><span style="font-weight:700">'+TL(x.tutar)+'</span> <button class="btn btn-sec btn-sm" onclick="silFirmaOdeme(\''+x.id+'\')">Sil</button></div></div>';
+        });
+      });
+      body+='</div>';
+    }
+    return head+body+'</div>';
+  }).join('');
   c.innerHTML=h;
 }
-function openFirmaOdeme(){
-  openModal('<div class="modal-head"><h3>Firma Ödemesi</h3><button class="modal-close" onclick="closeModal()">×</button></div>'
-    + '<label>Firma</label><input id="foFirma" placeholder="Firma adı">'
+function _foToggle(ek){ var k=decodeURIComponent(ek); window._foOpen=(window._foOpen===k)?null:k; ozetOdemeIcerik(document.getElementById('ozetIcerik')); }
+async function openFirmaOdeme(){
+  var names=[];
+  try{ var rr=await sb.from('firma_odemeleri').select('firma_ad').eq('is_deleted',false).limit(800); var seen={}; (rr.data||[]).forEach(function(x){ var k=_foNorm(x.firma_ad); if(k&&!seen[k]){seen[k]=1;names.push(x.firma_ad);} }); }catch(e){}
+  var dl=names.map(function(n){return '<option value="'+escapeHtml(n)+'">';}).join('');
+  openModal('<div class="modal-head"><h3>Tedarikçi Ödemesi</h3><button class="modal-close" onclick="closeModal()">×</button></div>'
+    + '<label>Firma / Tedarikçi</label><input id="foFirma" list="foFirmaList" placeholder="Ad yaz veya seç" autocomplete="off"><datalist id="foFirmaList">'+dl+'</datalist>'
     + '<label>Tutar (₺)</label><input id="foTutar" type="number" inputmode="decimal">'
     + '<label>Tarih</label><input id="foTarih" type="date" value="'+today()+'">'
     + '<label>Açıklama (opsiyonel)</label><input id="foAcik" placeholder="örn: un alımı">'
     + '<button class="btn btn-block mt" id="foSaveBtn" onclick="kaydetFirmaOdeme()">Kaydet</button>');
 }
 async function kaydetFirmaOdeme(){
-  var firma=(document.getElementById('foFirma').value||'').trim();
+  var firma=(document.getElementById('foFirma').value||'').trim().replace(/\s+/g,' ');
   var tutar=parseFloat(document.getElementById('foTutar').value);
-  if(!firma){ alert('Firma adı gir'); return; }
+  var tarih=document.getElementById('foTarih').value;
+  if(!firma){ alert('Firma/tedarikçi adı gir'); return; }
   if(!(tutar>0)){ alert('Geçerli tutar gir'); return; }
+  if(!tarih){ alert('Tarih seç'); return; }
   var btn=document.getElementById('foSaveBtn'); if(btn){btn.disabled=true;btn.textContent='Kaydediliyor...';}
-  var r=await sb.from('firma_odemeleri').insert({firma_ad:firma, tutar:tutar, tarih:document.getElementById('foTarih').value, aciklama:(document.getElementById('foAcik').value||'').trim()||null, giren_ad:CURRENT.ad_soyad});
+  try{
+    var d=new Date(tarih); var lo=new Date(d.getTime()-3*86400000).toISOString().slice(0,10); var hi=new Date(d.getTime()+3*86400000).toISOString().slice(0,10);
+    var cand=await sb.from('firma_odemeleri').select('firma_ad,tutar,tarih').eq('is_deleted',false).eq('tutar',tutar).gte('tarih',lo).lte('tarih',hi);
+    var hit=(cand.data||[]).filter(function(x){return _foNorm(x.firma_ad)===_foNorm(firma);});
+    if(hit.length){ if(!confirm('⚠ Bu tedarikçiye '+trDate(hit[0].tarih)+' '+TL(hit[0].tutar)+' ödeme zaten girilmiş (yakın tarih). Yine de ekle?')){ if(btn){btn.disabled=false;btn.textContent='Kaydet';} return; } }
+  }catch(e){}
+  var r=await sb.from('firma_odemeleri').insert({firma_ad:firma, tutar:tutar, tarih:tarih, aciklama:(document.getElementById('foAcik').value||'').trim()||null, giren_ad:CURRENT.ad_soyad});
   if(r.error){ if(btn){btn.disabled=false;btn.textContent='Kaydet';} alert('Kaydedilemedi: '+r.error.message); return; }
+  window._foOpen=_foNorm(firma);
   closeModal(); toast('✅ Ödeme kaydedildi',''); ozetOdemeIcerik(document.getElementById('ozetIcerik'));
 }
 async function silFirmaOdeme(id){
