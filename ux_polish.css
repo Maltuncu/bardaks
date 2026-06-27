@@ -118,3 +118,6 @@ body { background: var(--ux-bg) !important; -webkit-font-smoothing: antialiased;
 /* ---- Login marka logosu: karta yakın, dengeli (boşluk kapatıldı) ---- */
 .brand-logo{ width: 240px !important; max-width: 78vw !important; margin-bottom: -30px !important; }
 #login{ gap: 6px !important; }
+
+/* ---- Dark-mode guard: sayfa daima açık tema (OS dark'ta input/checkbox/takvim koyu render olup kremle çakışmasın) ---- */
+html{ color-scheme: light; }
