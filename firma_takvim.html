@@ -971,9 +971,9 @@ async function savePrice(fufId,urunId,eskiFiy){
   const tar=document.getElementById('epTar').value||new Date().toISOString().slice(0,10);
   // Versiyonlama: eski aktif kaydı kapat (gecerlilik_bitis), yeni satır insert et (hard-delete yok)
   const e1=await sb.from('firma_urun_fiyat').update({gecerlilik_bitis:tar}).eq('id',fufId);
-  if(e1.error){alert(e1.error.message);return;}
+  if(e1.error){console.error('[fiyat]',e1.error);alert('İşlem tamamlanamadı, tekrar deneyin.');return;}
   const e2=await sb.from('firma_urun_fiyat').insert({firma_id:cF,urun_id:urunId,birim_fiyat_kdv_haric:yeni,gecerlilik_baslangic:tar});
-  if(e2.error){alert(e2.error.message);return;}
+  if(e2.error){console.error('[fiyat]',e2.error);alert('İşlem tamamlanamadı, tekrar deneyin.');return;}
   if(Math.abs(yeni-eskiFiy)>0.001){
     await sb.from('firma_urun_log').insert({firma_id:cF,urun_id:urunId,islem:'fiyat_degisti',eski_fiyat:+Number(eskiFiy).toFixed(2),yeni_fiyat:yeni,yapan:'Firma Yönetim'}).catch(()=>{});
   }
@@ -984,7 +984,7 @@ async function savePrice(fufId,urunId,eskiFiy){
     const u=UR.find(x=>x.id===urunId)||{};const eskiMaliyet=Number(u.birim_maliyet||0);
     if(!isNaN(yeniMaliyet)&&yeniMaliyet>=0&&Math.abs(yeniMaliyet-eskiMaliyet)>0.001){
       const em=await sb.from('urunler').update({birim_maliyet:yeniMaliyet}).eq('id',urunId);
-      if(em.error){alert('Maliyet güncellenemedi: '+em.error.message);return;}
+      if(em.error){console.error('[maliyet]',em.error);alert('Maliyet güncellenemedi, tekrar deneyin.');return;}
     }
   }
   await reloadData();closeMo();renderFiyat();
@@ -993,7 +993,7 @@ async function urunKaldir(fufId,urunId,ad){
   if(!confirm(ad+' bu firmada satılmıyor olarak işaretlensin mi? (Fiyat kaldırılır, veri silinmez, geçmiş korunur)'))return;
   const dun=new Date(Date.now()-86400000).toISOString().slice(0,10);
   const e1=await sb.from('firma_urun_fiyat').update({gecerlilik_bitis:dun}).eq('id',fufId);
-  if(e1.error){alert(e1.error.message);return;}
+  if(e1.error){console.error('[fiyat]',e1.error);alert('İşlem tamamlanamadı, tekrar deneyin.');return;}
   await sb.from('firma_urun_log').insert({firma_id:cF,urun_id:urunId,islem:'cikarildi',eski_fiyat:null,yeni_fiyat:null,yapan:'Firma Yönetim'}).catch(()=>{});
   await reloadData();renderFiyat();
 }
@@ -1003,7 +1003,8 @@ function showAddPrice(){
   var active=(FY||[]).filter(function(p){return String(p.firma_id)===String(cF);}).map(function(p){return p.urun_id;});
   _apList=UR.filter(function(u){return u.aktif!==false&&u.satis_urunu!==false&&!u.is_deleted&&active.indexOf(u.id)<0;}).sort(function(a,b){return (a.ad||'').localeCompare(b.ad||'','tr');});
   var today=new Date().toISOString().slice(0,10); // [KATALOG-FIX] varsayılan başlangıç BUGÜN
-  var h='<div class="mp-h"><h3>➕ Firmaya Ürün Ekle</h3><button class="mp-x" onclick="closeMo()">✕</button></div>';
+  var _fAd=((F||[]).find(function(x){return String(x.id)===String(cF);})||{}).ad||'Firma';
+  var h='<div class="mp-h"><h3>➕ '+esc(_fAd)+' — Ürün Ekle</h3><button class="mp-x" onclick="closeMo()">✕</button></div>';
   if(!_apList.length){
     h+='<div style="padding:12px;color:var(--dm);font-size:13px">Eklenebilecek ürün yok — bu firmanın aktif kataloğunda tüm satış ürünleri zaten tanımlı.</div>';
     h+='<div style="margin-top:10px"><button class="b s" onclick="closeMo()">Kapat</button></div>';
@@ -1015,7 +1016,7 @@ function showAddPrice(){
   h+='<div style="display:flex;gap:8px;margin-top:8px"><div style="flex:1"><label>Satış Fiyatı (KDV hariç)</label><input type="number" step="0.01" id="apFiy"></div>';
   h+='<div style="width:80px"><label>KDV %</label><input type="number" id="apKdv" value="1"></div></div>';
   h+='<label>Geçerlilik Başlangıç</label><input type="date" id="apBas" value="'+today+'">';
-  h+='<div style="display:flex;gap:8px;margin-top:12px"><button class="b" style="flex:1" onclick="doAddPrice()">Ekle</button><button class="b s" style="flex:1" onclick="closeMo()">İptal</button></div>';
+  h+='<div style="display:flex;gap:8px;margin-top:12px"><button class="b" id="apEkleBtn" style="flex:1" onclick="doAddPrice()">Ekle</button><button class="b s" style="flex:1" onclick="closeMo()">İptal</button></div>';
   fmOpenMo(h);
   apRender();
 }
@@ -1029,31 +1030,39 @@ function apRender(){
 function apFill(){const s=document.getElementById('apSel');if(!s||!s.value)return;const o=s.options[s.selectedIndex];
   const kdv=parseFloat(o.getAttribute('data-kdv'))||1;const haric=parseFloat(o.getAttribute('data-fiy'))||0;
   document.getElementById('apFiy').value=haric?(+haric.toFixed(2)):'';document.getElementById('apKdv').value=kdv;}
+var _apBusy=false; // [SPRINT] çift-tık guard
 async function doAddPrice(){
+  if(_apBusy) return; // [SPRINT] devam eden ekleme varken ikinci tık yok
   const sel=document.getElementById('apSel');const uid=sel&&sel.value?sel.value:null;
   if(!uid){alert('Katalogdan ürün seç');return;}
   const fiy=+(parseFloat(document.getElementById('apFiy').value)).toFixed(2); // KDV hariç — doğrudan saklanır
   if(!(fiy>0)){alert('Geçerli satış fiyatı gir (KDV hariç, 0/negatif olamaz)');return;}
   const bas=document.getElementById('apBas').value||new Date().toISOString().slice(0,10);
-  // [KATALOG-FIX] Mükerrer engeli + ham SQL hatası gösterme. Aktif kayıt varsa engelle.
-  const chk=await sb.from('firma_urun_fiyat').select('id,gecerlilik_baslangic,gecerlilik_bitis,is_deleted').eq('firma_id',cF).eq('urun_id',uid);
-  if(chk.error){alert('Ürün eklenemedi, tekrar deneyin.');console.error('[katalog] check',chk.error);return;}
-  const rows=chk.data||[];
-  if(rows.some(function(r){return !r.gecerlilik_bitis&&!r.is_deleted;})){
-    alert('Bu ürün bu firmada zaten aktif satılıyor. Fiyatı değiştirmek için listeden "Düzenle" kullanın.');return;
-  }
-  // Ekle. Aynı başlangıç tarihli eski/kaldırılmış kayıt (unique çakışması) varsa onu yeniden aktive et.
-  const ins=await sb.from('firma_urun_fiyat').insert({firma_id:cF,urun_id:uid,birim_fiyat_kdv_haric:fiy,gecerlilik_baslangic:bas});
-  if(ins.error){
-    if(ins.error.code==='23505'||/duplicate key/i.test(ins.error.message||'')){
-      const rea=await sb.from('firma_urun_fiyat').update({gecerlilik_bitis:null,is_deleted:false,birim_fiyat_kdv_haric:fiy}).eq('firma_id',cF).eq('urun_id',uid).eq('gecerlilik_baslangic',bas);
-      if(rea.error){alert('Ürün eklenemedi, tekrar deneyin.');console.error('[katalog] reactivate',rea.error);return;}
-    } else {
-      alert('Ürün eklenemedi, tekrar deneyin.');console.error('[katalog] insert',ins.error);return;
+  const _btn=document.getElementById('apEkleBtn');
+  _apBusy=true; if(_btn){_btn.disabled=true;_btn.textContent='Ekleniyor…';}
+  try{
+    // [KATALOG-FIX] Mükerrer engeli + ham SQL hatası gösterme. Aktif kayıt varsa engelle.
+    const chk=await sb.from('firma_urun_fiyat').select('id,gecerlilik_baslangic,gecerlilik_bitis,is_deleted').eq('firma_id',cF).eq('urun_id',uid);
+    if(chk.error){alert('Ürün eklenemedi, tekrar deneyin.');console.error('[katalog] check',chk.error);return;}
+    const rows=chk.data||[];
+    if(rows.some(function(r){return !r.gecerlilik_bitis&&!r.is_deleted;})){
+      alert('Bu ürün bu firmada zaten aktif satılıyor. Fiyatı değiştirmek için listeden "Düzenle" kullanın.');return;
     }
+    // Ekle. Aynı başlangıç tarihli eski/kaldırılmış kayıt (unique çakışması) varsa onu yeniden aktive et.
+    const ins=await sb.from('firma_urun_fiyat').insert({firma_id:cF,urun_id:uid,birim_fiyat_kdv_haric:fiy,gecerlilik_baslangic:bas});
+    if(ins.error){
+      if(ins.error.code==='23505'||/duplicate key/i.test(ins.error.message||'')){
+        const rea=await sb.from('firma_urun_fiyat').update({gecerlilik_bitis:null,is_deleted:false,birim_fiyat_kdv_haric:fiy}).eq('firma_id',cF).eq('urun_id',uid).eq('gecerlilik_baslangic',bas);
+        if(rea.error){alert('Ürün eklenemedi, tekrar deneyin.');console.error('[katalog] reactivate',rea.error);return;}
+      } else {
+        alert('Ürün eklenemedi, tekrar deneyin.');console.error('[katalog] insert',ins.error);return;
+      }
+    }
+    await sb.from('firma_urun_log').insert({firma_id:cF,urun_id:uid,islem:'eklendi',eski_fiyat:null,yeni_fiyat:fiy,yapan:'Firma Yönetim'}).catch(()=>{});
+    closeMo();await reloadData();renderFiyat();
+  } finally {
+    _apBusy=false; if(_btn){_btn.disabled=false;_btn.textContent='Ekle';}
   }
-  await sb.from('firma_urun_log').insert({firma_id:cF,urun_id:uid,islem:'eklendi',eski_fiyat:null,yeni_fiyat:fiy,yapan:'Firma Yönetim'}).catch(()=>{});
-  closeMo();await reloadData();renderFiyat();
 }
 
 // ═══ 📋 GEÇMİŞ ═══
