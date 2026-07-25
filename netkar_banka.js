@@ -49,8 +49,8 @@
 
   function injectUI(){
     // Net & Banka FAB (sağ, nav üstünde)
-    var b=document.createElement('button'); b.id='nb-fab'; b.textContent='💰 Net & Banka';
     /* [BTN-KALDIR 2026-07-26] Net & Banka FAB butonu kaldirildi (kullanici istegi); panel ve openFirmaDetay duruyor */
+    var o=document.createElement('div'); o.id='nb-ov'; o.innerHTML='<div id="nb-panel"></div>';
     o.addEventListener('click',function(e){ if(e.target===o) close(); });
     document.body.appendChild(o);
 
