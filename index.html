@@ -312,6 +312,31 @@ let CURRENT = null;
 let FIRMALAR = [], URUNLER = [], FIYATLAR = [];
 
 const TL = n => (Number(n)||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ₺';
+// [TR-PARA-1] Türkçe para girişi: "20.000"→20000 · "13.540,00"→13540 · "1.500.000"→1500000 · "20,5"→20.5 · "20.5"→20.5
+// SEBEP: type=number + parseFloat, "20.000"u 20 olarak alıyordu (Hamzaoğlu 20.000→20, Arapoğlu 13.540→13,54 vakası)
+function trNum(v){
+  if(v===null||v===undefined) return NaN;
+  var s=String(v).trim().replace(/[\s ₺]|TL/gi,'');
+  if(!s) return NaN;
+  var neg=/^-/.test(s); s=s.replace(/^[-+]/,'');
+  var hasComma=s.indexOf(',')>=0, hasDot=s.indexOf('.')>=0;
+  if(hasComma && hasDot){ s=s.replace(/\./g,'').replace(',','.'); }        // 13.540,00 → nokta=binlik
+  else if(hasComma){ s=s.replace(',','.'); }                                // 13540,50 → virgül=ondalık
+  else if(hasDot){                                                          // yalnız nokta: 3'lü grup = binlik
+    var p=s.split('.');
+    if(p.length>2 || p[p.length-1].length===3) s=p.join('');
+  }
+  var n=Number(s);
+  if(!isFinite(n)) return NaN;
+  return neg?-n:n;
+}
+// [TR-PARA-1] input'a canlı "= 20.000,00 ₺" önizlemesi bas (belirsizlik kalmasın)
+function trOnizle(inputId, hedefId){
+  var i=document.getElementById(inputId), h=document.getElementById(hedefId);
+  if(!i||!h) return;
+  var n=trNum(i.value);
+  h.textContent = (i.value&&isFinite(n)&&n>0) ? ('= '+TL(n)) : '';
+}
 const today = () => new Date().toISOString().slice(0,10);
 const trDate = d => { if(!d) return ''; const p=d.slice(0,10).split('-'); return p[2]+'.'+p[1]+'.'+p[0]; };
 
@@ -835,19 +860,19 @@ async function ozetPersonelIcerik(c){
   var oneriler=personel.filter(function(p){return p.aktif!==false && !rows[p.id];});
   h+='<div class="card"><div class="card-title">Personel Satırı Ekle ('+ay+')</div>'
     +'<div class="row"><div><label>Ad Soyad</label><input id="prsAd" list="prsAdList" placeholder="Ad yaz veya seç" autocomplete="off"><datalist id="prsAdList">'+oneriler.map(function(p){return '<option value="'+escapeHtml(p.ad)+'">';}).join('')+'</datalist></div><div><label>Kategori</label><select id="prsKat"><option>İmalathane</option><option>Bar</option></select></div></div>'
-    +'<div class="row mt"><div><label>Maaş (hesaba yatan / net)</label><input type="number" inputmode="decimal" id="prsMaas" placeholder="0,00"></div><div><label>SGK (yasal — otomatik)</label><input type="number" inputmode="decimal" id="prsSgk" value="'+PRS_SGK_YASAL+'"></div></div>'
+    +'<div class="row mt"><div><label>Maaş (hesaba yatan / net)</label><input type="text" inputmode="decimal" id="prsMaas" placeholder="0,00"></div><div><label>SGK (yasal — otomatik)</label><input type="text" inputmode="decimal" id="prsSgk" value="'+PRS_SGK_YASAL+'"></div></div>'
     +'<div style="font-size:11px;color:var(--text-dim);background:var(--surface2);border-radius:8px;padding:8px 10px;margin-top:6px">Net maaşı yaz → SGK yasal yük (asgari ücret işçi+işveren) otomatik dolu gelir. Teşvik alıyorsan ya da asgari üstü bordro varsa SGK\'yı elle düzelt.</div>'
-    +'<div class="row mt"><div><label>Prim</label><input type="number" inputmode="decimal" id="prsPrim" placeholder="0,00"></div><div><label>Yemek</label><input type="number" inputmode="decimal" id="prsYemek" placeholder="0,00"></div></div>'
+    +'<div class="row mt"><div><label>Prim</label><input type="text" inputmode="decimal" id="prsPrim" placeholder="0,00"></div><div><label>Yemek</label><input type="text" inputmode="decimal" id="prsYemek" placeholder="0,00"></div></div>'
     +'<button class="btn btn-block mt" id="prsEkleBtn" onclick="prsSatirEkle()">Satırı Ekle</button></div>';
   c.innerHTML=h;
 }
 async function prsSatirEkle(){
   var ad=(document.getElementById('prsAd').value||'').trim().replace(/\s+/g,' ');
   if(!ad){ alert('Ad soyad gir'); return; }
-  var maas=parseFloat(document.getElementById('prsMaas').value)||0;
-  var sgk=parseFloat(document.getElementById('prsSgk').value)||0;
-  var prim=parseFloat(document.getElementById('prsPrim').value)||0;
-  var yemek=parseFloat(document.getElementById('prsYemek').value)||0;
+  var maas=trNum(document.getElementById('prsMaas').value)||0;
+  var sgk=trNum(document.getElementById('prsSgk').value)||0;
+  var prim=trNum(document.getElementById('prsPrim').value)||0;
+  var yemek=trNum(document.getElementById('prsYemek').value)||0;
   if(!(maas>0)&&!(sgk>0)&&!(prim>0)&&!(yemek>0)){ alert('En az bir tutar gir'); return; }
   var btn=document.getElementById('prsEkleBtn'); if(btn){btn.disabled=true;btn.textContent='Kaydediliyor…';}
   try{
@@ -1127,7 +1152,7 @@ async function openSiparisDetay(sid){
     if(!s.kilitli){
       if(s.durum==='hazir') acts += '<button class="btn btn-sm" onclick="durumIlerlet(\''+sid+'\',\'sevk_edildi\')">🚚 Sevk Et</button><button class="btn btn-sm" onclick="faturaKes(\''+s.firma_id+'\')">🧾 Fatura Kes</button>';
       if(s.durum==='sevk_edildi') acts += '<button class="btn btn-sm" onclick="faturaKes(\''+s.firma_id+'\')">🧾 Fatura Kes</button>';
-      if(s.durum==='bekleyen'||s.durum==='uretimde'||s.durum==='hazir') acts += '<button class="btn btn-sec btn-sm" onclick="siparisDuzenle(\''+sid+'\')">✏️ Düzenle</button>';
+      if(['bekleyen','uretimde','hazir','sevk_edildi','tamamlandi'].indexOf(s.durum)>=0) acts += '<button class="btn btn-sec btn-sm" onclick="siparisDuzenle(\''+sid+'\')">✏️ Düzenle</button>';
       else if(s.durum!=='iptal') acts += '<span class="tag tag-dim" title="Bu durumdaki sipariş düzenlenemez">✏️ '+durumAd(s.durum)+' — düzenlenemez</span>'; // [EDIT-SAFE-1] sessiz yokluk yerine neden
       if(s.durum!=='iptal') acts += '<button class="btn btn-sec btn-sm" onclick="siparisIptal(\''+sid+'\')">❌ İptal</button>';
     }
@@ -1813,7 +1838,7 @@ async function openTahsilat(firmaId){
   const f=FIRMALAR.find(function(x){return x.id===firmaId;})||{};
   const ayar = await getAyar('cek_aylik_iskonto');
   window._thAccounts = await loadTahsilatHesaplari();
-  openModal('<div class="modal-head"><h3>Tahsilat · '+escapeHtml(f.ad)+'</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Tarih</label><input type="date" id="thTarih" value="'+today()+'"><label>Brüt Tahsilat (₺)</label><input type="number" id="thTutar" oninput="thHesap()"><label>Ödeme Tipi</label><select id="thTip" onchange="thTipChange()"><option value="havale">Havale</option><option value="nakit">Nakit</option><option value="kredi_karti">Kredi Kartı / POS</option><option value="cek">Çek</option></select><label>Hesap</label><select id="thAccount" onchange="thHesap()">'+thHesapOptions('havale')+'</select><label>Valör / Hesaba Geçiş Tarihi</label><input type="date" id="thValor" value="'+today()+'"><div id="thKart" class="hidden"><label>POS Komisyon Oranı (%)</label><input type="number" id="thKomisyon" step="0.1" placeholder="örn 1.8" oninput="thHesap()"></div><div id="thCek" class="hidden"><label>Çek No</label><input id="thCekNo"><label>Çek Vade Tarihi</label><input type="date" id="thVade" oninput="thHesap()"><div style="font-size:12px;color:var(--text-dim);margin-top:4px">Aylık iskonto: %'+ayar+'</div></div><label>Dekont / Belge Referansı</label><input id="thDekont" placeholder="dosya adı veya dekont no"><label>Hangi aya ait? (opsiyonel)</label><input id="thAy" placeholder="örn 2026-05"><label>Açıklama</label><input id="thAciklamaTxt"><div id="thOzet" class="mt" style="background:var(--surface2);padding:12px;border-radius:9px;font-size:13px"></div><button class="btn btn-block mt" id="thSaveBtn" onclick="kaydetTahsilat(\''+firmaId+'\')">Tahsilatı Kaydet</button><div class="card mt"><div class="card-title">Son Tahsilatlar</div><div id="thGecmis"><div class="loading">Yükleniyor...</div></div></div>');
+  openModal('<div class="modal-head"><h3>Tahsilat · '+escapeHtml(f.ad)+'</h3><button class="modal-close" onclick="closeModal()">×</button></div><label>Tarih</label><input type="date" id="thTarih" value="'+today()+'"><label>Brüt Tahsilat (₺)</label><input type="text" inputmode="decimal" id="thTutar" placeholder="örn 20.000 veya 20000" oninput="trOnizle(\'thTutar\',\'thTutarOnizle\');thHesap()"><div id="thTutarOnizle" style="font-size:13px;font-weight:700;color:var(--accent);min-height:18px;margin-top:2px"></div><label>Ödeme Tipi</label><select id="thTip" onchange="thTipChange()"><option value="havale">Havale</option><option value="nakit">Nakit</option><option value="kredi_karti">Kredi Kartı / POS</option><option value="cek">Çek</option></select><label>Hesap</label><select id="thAccount" onchange="thHesap()">'+thHesapOptions('havale')+'</select><label>Valör / Hesaba Geçiş Tarihi</label><input type="date" id="thValor" value="'+today()+'"><div id="thKart" class="hidden"><label>POS Komisyon Oranı (%)</label><input type="number" id="thKomisyon" step="0.1" placeholder="örn 1.8" oninput="thHesap()"></div><div id="thCek" class="hidden"><label>Çek No</label><input id="thCekNo"><label>Çek Vade Tarihi</label><input type="date" id="thVade" oninput="thHesap()"><div style="font-size:12px;color:var(--text-dim);margin-top:4px">Aylık iskonto: %'+ayar+'</div></div><label>Dekont / Belge Referansı</label><input id="thDekont" placeholder="dosya adı veya dekont no"><label>Hangi aya ait? (opsiyonel)</label><input id="thAy" placeholder="örn 2026-05"><label>Açıklama</label><input id="thAciklamaTxt"><div id="thOzet" class="mt" style="background:var(--surface2);padding:12px;border-radius:9px;font-size:13px"></div><button class="btn btn-block mt" id="thSaveBtn" onclick="kaydetTahsilat(\''+firmaId+'\')">Tahsilatı Kaydet</button><div class="card mt"><div class="card-title">Son Tahsilatlar</div><div id="thGecmis"><div class="loading">Yükleniyor...</div></div></div>');
   window._cekIskonto=Number(ayar)||3.5;
   thHesap();
   renderTahsilatListesi(firmaId);
@@ -1844,7 +1869,7 @@ function thTipChange(){
   thHesap();
 }
 function thHesap(){
-  const tutar=Number(document.getElementById('thTutar').value)||0;
+  const tutar=trNum(document.getElementById('thTutar').value)||0; // [TR-PARA-1]
   const tip=document.getElementById('thTip').value;
   let html='', net=tutar;
   if(tip==='kredi_karti'){
@@ -1868,7 +1893,7 @@ function thHesap(){
 var _tahBusy=false; // [FIX-4b] çift-tık / mükerrer tahsilat guard
 async function kaydetTahsilat(firmaId){
   if(_tahBusy) return; // [FIX-4b] devam eden kayıt varken ikinci tık yok
-  const tutar=Number(document.getElementById('thTutar').value);
+  const tutar=trNum(document.getElementById('thTutar').value); // [TR-PARA-1]
   if(!(tutar>0)){ toast('Tahsilat kaydedilemedi','Geçerli brüt tutar gir.'); return; }
   const tip=document.getElementById('thTip').value;
   const accountId=val('thAccount');
@@ -2237,14 +2262,14 @@ async function openFirmaOdeme(){
   var dl=names.map(function(n){return '<option value="'+escapeHtml(n)+'">';}).join('');
   openModal('<div class="modal-head"><h3>Tedarikçi Ödemesi</h3><button class="modal-close" onclick="closeModal()">×</button></div>'
     + '<label>Firma / Tedarikçi</label><input id="foFirma" list="foFirmaList" placeholder="Ad yaz veya seç" autocomplete="off"><datalist id="foFirmaList">'+dl+'</datalist>'
-    + '<label>Tutar (₺)</label><input id="foTutar" type="number" inputmode="decimal">'
+    + '<label>Tutar (₺)</label><input id="foTutar" type="text" inputmode="decimal" placeholder="örn 20.000 veya 20000" oninput="trOnizle(\'foTutar\',\'foTutarOnizle\')"><div id="foTutarOnizle" style="font-size:13px;font-weight:700;color:var(--accent);min-height:18px;margin-top:2px"></div>'
     + '<label>Tarih</label><input id="foTarih" type="date" value="'+today()+'">'
     + '<label>Açıklama (opsiyonel)</label><input id="foAcik" placeholder="örn: un alımı">'
     + '<button class="btn btn-block mt" id="foSaveBtn" onclick="kaydetFirmaOdeme()">Kaydet</button>');
 }
 async function kaydetFirmaOdeme(){
   var firma=(document.getElementById('foFirma').value||'').trim().replace(/\s+/g,' ');
-  var tutar=parseFloat(document.getElementById('foTutar').value);
+  var tutar=trNum(document.getElementById('foTutar').value); // [TR-PARA-1]
   var tarih=document.getElementById('foTarih').value;
   if(!firma){ alert('Firma/tedarikçi adı gir'); return; }
   if(!(tutar>0)){ alert('Geçerli tutar gir'); return; }
@@ -2286,7 +2311,7 @@ function fisSatirCiz(){
   var c=document.getElementById('fgSatirlar'); if(!c) return;
   c.innerHTML=_fisSatir.map(function(s,i){
     return '<div style="display:flex;gap:6px;margin-bottom:6px"><input placeholder="ürün (örn yumurta)" value="'+escapeHtml(s.urun)+'" style="flex:1;min-height:44px" oninput="_fisSatir['+i+'].urun=this.value">'
-      +'<input type="number" inputmode="decimal" placeholder="₺" value="'+(s.tutar||'')+'" style="width:100px;min-height:44px;text-align:right" oninput="_fisSatir['+i+'].tutar=this.value;fisHesap()">'
+      +'<input type="text" inputmode="decimal" placeholder="₺" value="'+(s.tutar||'')+'" style="width:100px;min-height:44px;text-align:right" oninput="_fisSatir['+i+'].tutar=this.value;fisHesap()">'
       +'<button class="btn btn-sec btn-sm" style="flex:0 0 auto" onclick="fisSatirSil('+i+')">×</button></div>';
   }).join('');
   fisHesap();
@@ -2294,7 +2319,7 @@ function fisSatirCiz(){
 function fisSatirEkle(){ _fisSatir.push({urun:'',tutar:''}); fisSatirCiz(); }
 function fisSatirSil(i){ _fisSatir.splice(i,1); if(!_fisSatir.length)_fisSatir.push({urun:'',tutar:''}); fisSatirCiz(); }
 function fisHesap(){
-  var t=_fisSatir.reduce(function(s,x){return s+(parseFloat(x.tutar)||0);},0);
+  var t=_fisSatir.reduce(function(s,x){return s+(trNum(x.tutar)||0);},0); // [TR-PARA-1]
   var el=document.getElementById('fgToplam'); if(el) el.textContent='Fiş toplamı: '+TL(t);
 }
 async function fisKaydet(){
@@ -2302,7 +2327,7 @@ async function fisKaydet(){
   var tarih=document.getElementById('fgTarih').value;
   if(!firma){ alert('Market/tedarikçi adı gir'); return; }
   if(!tarih){ alert('Tarih seç'); return; }
-  var dolu=_fisSatir.map(function(s){return {urun:(s.urun||'').trim(), tutar:parseFloat(s.tutar)};}).filter(function(s){return s.tutar>0;});
+  var dolu=_fisSatir.map(function(s){return {urun:(s.urun||'').trim(), tutar:trNum(s.tutar)};}).filter(function(s){return s.tutar>0;}); // [TR-PARA-1]
   if(!dolu.length){ alert('En az bir ürüne tutar gir'); return; }
   if(dolu.some(function(s){return !s.urun;})){ alert('Tutar girilen her satıra ürün adı da yaz (yıl sonunda ne olduğu belli olsun)'); return; }
   var btn=document.getElementById('fgSaveBtn'); if(btn){btn.disabled=true;btn.textContent='Kaydediliyor…';}
@@ -2347,7 +2372,7 @@ async function ozetFaturaIcerik(c){
     var m=tek(tip);
     h+='<div class="flex-between" style="padding:8px 0;border-bottom:1px solid var(--border)"><div>'+tip+(m?'<div style="font-size:11px;color:var(--text-dim)">'+trDate(m.tarih)+'</div>':'')+'</div>';
     if(m){ faturaTop+=Number(m.tutar||0); h+='<div style="display:flex;gap:6px;align-items:center"><strong style="color:var(--green)">✓ '+TL(m.tutar)+'</strong><button class="btn btn-sec btn-sm" onclick="ftSil(\''+m.id+'\')">Sil</button></div>'; }
-    else { h+='<div style="display:flex;gap:6px"><input type="number" inputmode="decimal" id="ft_'+i+'" placeholder="₺" style="width:110px;min-height:42px;text-align:right"><button class="btn btn-sm" onclick="ftKaydet('+i+')">Kaydet</button></div>'; }
+    else { h+='<div style="display:flex;gap:6px"><input type="text" inputmode="decimal" id="ft_'+i+'" placeholder="₺" style="width:110px;min-height:42px;text-align:right"><button class="btn btn-sm" onclick="ftKaydet('+i+')">Kaydet</button></div>'; }
     h+='</div>';
   });
   // [KIRA-3X] 3 ayrı kira: her biri net + kendi stopajı (%20 brüt üzerinden = net × 0.25), ayrı kayıtlar
@@ -2360,7 +2385,7 @@ async function ozetFaturaIcerik(c){
       h+=(ms?'<div class="flex-between" style="margin-top:4px"><span style="font-size:12px;color:var(--text-dim)">↳ Stopaj (%20 brüt)</span><strong style="font-size:13px">'+TL(ms.tutar)+'</strong></div>':'');
       h+=(ms?'<div class="flex-between" style="margin-top:2px"><span style="font-size:12px;color:var(--text-dim)">↳ '+kAd+' toplam maliyet</span><strong style="font-size:13px">'+TL(Number(mk.tutar||0)+Number(ms.tutar||0))+'</strong></div>':'');
     } else {
-      h+='<div style="display:flex;gap:6px"><input type="number" inputmode="decimal" id="ftKiraNet_'+ki+'" placeholder="net ₺" style="width:110px;min-height:42px;text-align:right" oninput="ftKiraHesap('+ki+')"><button class="btn btn-sm" onclick="ftKiraKaydet('+ki+')">Kaydet</button></div></div>';
+      h+='<div style="display:flex;gap:6px"><input type="text" inputmode="decimal" id="ftKiraNet_'+ki+'" placeholder="net ₺" style="width:110px;min-height:42px;text-align:right" oninput="ftKiraHesap('+ki+')"><button class="btn btn-sm" onclick="ftKiraKaydet('+ki+')">Kaydet</button></div></div>';
       h+='<div id="ftKiraInfo_'+ki+'" style="font-size:12px;color:var(--text-dim);margin-top:4px"></div>';
     }
     h+='</div>';
@@ -2388,19 +2413,19 @@ async function ozetFaturaIcerik(c){
 function _ftTarih(){ var ay=window._ftAy; return ay===_ftAyStr(new Date())?today():ay+'-01'; }
 async function ftKaydet(i){
   var tip=FATURA_TIPLERI[i]; var inp=document.getElementById('ft_'+i);
-  var tutar=parseFloat(inp&&inp.value); if(!(tutar>0)){ alert('Geçerli tutar gir'); return; }
+  var tutar=trNum(inp&&inp.value); if(!(tutar>0)){ alert('Geçerli tutar gir'); return; }
   var r=await sb.from('firma_odemeleri').insert({firma_ad:tip, tutar:tutar, tarih:_ftTarih(), aciklama:'aylık fatura', giren_ad:CURRENT.ad_soyad});
   if(r.error){ console.error('[fatura]',r.error); alert('Kaydedilemedi, tekrar deneyin.'); return; }
   toast('✅ '+tip+' kaydedildi',TL(tutar)); ozetFaturaIcerik(document.getElementById('ozetIcerik'));
 }
 function ftKiraHesap(ki){
-  var n=parseFloat((document.getElementById('ftKiraNet_'+ki)||{}).value)||0;
+  var n=trNum((document.getElementById('ftKiraNet_'+ki)||{}).value)||0;
   var el=document.getElementById('ftKiraInfo_'+ki); if(!el) return;
   el.innerHTML=n>0?('Stopaj (%20 brüt): <b>'+TL(n*0.25)+'</b> · Toplam maliyet: <b>'+TL(n*1.25)+'</b>'):'';
 }
 async function ftKiraKaydet(ki){
   var kAd=KIRA_ADLARI[ki]; if(!kAd) return;
-  var n=parseFloat((document.getElementById('ftKiraNet_'+ki)||{}).value);
+  var n=trNum((document.getElementById('ftKiraNet_'+ki)||{}).value);
   if(!(n>0)){ alert('Net kira tutarı gir'); return; }
   var t=_ftTarih();
   var r1=await sb.from('firma_odemeleri').insert({firma_ad:kAd, tutar:n, tarih:t, aciklama:'aylık kira (net)', giren_ad:CURRENT.ad_soyad});
@@ -2839,7 +2864,7 @@ async function openFiyatListesi(){
     gruplar[kat].forEach(function(u){
       var fiyatHaric = u.varsayilan_fiyat || '';
       var _mal=Number(u.birim_maliyet)||0; // [FL-MARJ-1] maliyet + canlı kâr% yalnız bu ekranda — PDF'e YANSIMAZ
-      h += '<div class="fl-row"><label class="fl-check"><input type="checkbox" data-uid="'+u.id+'" class="flCb"><span>'+escapeHtml(u.ad)+(u.gramaj?' <small style="color:var(--text-dim)">('+escapeHtml(u.gramaj)+')</small>':'')+'<div style="font-size:11px;color:var(--text-dim)">maliyet: '+(_mal>0?TL(_mal):'—')+'</div></span></label><input type="number" class="fl-fiyat" id="flf-'+u.id+'" value="'+fiyatHaric+'" placeholder="₺" style="width:75px;text-align:right" oninput="flMarj(\''+u.id+'\')"><div id="flm-'+u.id+'" style="width:46px;text-align:right;font-size:12px;flex:0 0 auto"></div></div>';
+      h += '<div class="fl-row"><label class="fl-check"><input type="checkbox" data-uid="'+u.id+'" class="flCb"><span>'+escapeHtml(u.ad)+(u.gramaj?' <small style="color:var(--text-dim)">('+escapeHtml(u.gramaj)+')</small>':'')+'<div style="font-size:11px;color:var(--text-dim)">maliyet: '+(_mal>0?TL(_mal):'—')+'</div></span></label><input type="text" inputmode="decimal" class="fl-fiyat" id="flf-'+u.id+'" value="'+fiyatHaric+'" placeholder="₺" style="width:75px;text-align:right" oninput="flMarj(\''+u.id+'\')"><div id="flm-'+u.id+'" style="width:46px;text-align:right;font-size:12px;flex:0 0 auto"></div></div>';
     });
   });
   h += '</div>';
@@ -2852,7 +2877,7 @@ async function openFiyatListesi(){
 function flMarj(uid){
   var u=flUrunler.find(function(x){return x.id===uid;}); if(!u) return;
   var el=document.getElementById('flm-'+uid); if(!el) return;
-  var f=parseFloat((document.getElementById('flf-'+uid)||{}).value)||0;
+  var f=trNum((document.getElementById('flf-'+uid)||{}).value)||0;
   var m=Number(u.birim_maliyet)||0;
   if(!(m>0)){ el.innerHTML='<span style="font-size:10px;color:#B7791F">mal.yok</span>'; return; }
   if(!(f>0)){ el.innerHTML=''; return; }
