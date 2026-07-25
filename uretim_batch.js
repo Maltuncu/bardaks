@@ -82,8 +82,7 @@
 
   /* ---------- UI shell ---------- */
   function injectUI(){
-    var b=document.createElement('button'); b.id='ub-fab'; b.textContent='🏭 Batch Üretim';
-    b.onclick=openBatch; document.body.appendChild(b);
+    /* [BTN-KALDIR 2026-07-26] Batch Uretim FAB butonu kaldirildi (kullanici istegi); motor ve panel duruyor */
     var o=document.createElement('div'); o.id='ub-ov'; o.innerHTML='<div id="ub-panel"></div>';
     o.addEventListener('click',function(e){ if(e.target===o) close(); });
     document.body.appendChild(o);
