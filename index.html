@@ -2262,10 +2262,30 @@ async function openFirmaOdeme(){
   var dl=names.map(function(n){return '<option value="'+escapeHtml(n)+'">';}).join('');
   openModal('<div class="modal-head"><h3>Tedarikçi Ödemesi</h3><button class="modal-close" onclick="closeModal()">×</button></div>'
     + '<label>Firma / Tedarikçi</label><input id="foFirma" list="foFirmaList" placeholder="Ad yaz veya seç" autocomplete="off"><datalist id="foFirmaList">'+dl+'</datalist>'
-    + '<label>Tutar (₺)</label><input id="foTutar" type="text" inputmode="decimal" placeholder="örn 20.000 veya 20000" oninput="trOnizle(\'foTutar\',\'foTutarOnizle\')"><div id="foTutarOnizle" style="font-size:13px;font-weight:700;color:var(--accent);min-height:18px;margin-top:2px"></div>'
+    + '<label>Tutar (₺)</label><input id="foTutar" type="text" inputmode="decimal" placeholder="örn 20.000 veya 20000" oninput="trOnizle(\'foTutar\',\'foTutarOnizle\');foTaksitOnizle()"><div id="foTutarOnizle" style="font-size:13px;font-weight:700;color:var(--accent);min-height:18px;margin-top:2px"></div>'
     + '<label>Tarih</label><input id="foTarih" type="date" value="'+today()+'">'
-    + '<label>Açıklama (opsiyonel)</label><input id="foAcik" placeholder="örn: un alımı">'
+    + '<div class="row mt"><div><label>Ödeme Tipi</label><select id="foTip" onchange="foTaksitDegis()"><option value="nakit">Nakit</option><option value="havale">Havale/EFT</option><option value="kredi_karti">Kredi Kartı</option></select></div>'
+    + '<div id="foTaksitW" style="display:none"><label>Taksit</label><select id="foTaksit" onchange="foTaksitOnizle()">'+[1,2,3,4,5,6,7,8,9,10,11,12].map(function(n){return '<option value="'+n+'">'+(n===1?'Tek çekim':n+' taksit')+'</option>';}).join('')+'</select></div></div>'
+    + '<div id="foTaksitBilgi" style="font-size:12px;color:var(--text-dim);margin-top:6px"></div>' // [TAKSIT-1]
+    + '<label class="mt">Açıklama (opsiyonel)</label><input id="foAcik" placeholder="örn: un alımı">'
     + '<button class="btn btn-block mt" id="foSaveBtn" onclick="kaydetFirmaOdeme()">Kaydet</button>');
+}
+// [TAKSIT-1] kart seçilince taksit alanı; taksitte her ay ayrı kayıt → aylık nakit çıkışı gerçeğe uygun olur
+function foTaksitDegis(){
+  var kart=(document.getElementById('foTip')||{}).value==='kredi_karti';
+  var w=document.getElementById('foTaksitW'); if(w) w.style.display=kart?'':'none';
+  if(!kart){ var s=document.getElementById('foTaksit'); if(s) s.value='1'; }
+  foTaksitOnizle();
+}
+function foTaksitOnizle(){
+  var el=document.getElementById('foTaksitBilgi'); if(!el) return;
+  var kart=(document.getElementById('foTip')||{}).value==='kredi_karti';
+  var n=kart?(parseInt((document.getElementById('foTaksit')||{}).value,10)||1):1;
+  var tut=trNum((document.getElementById('foTutar')||{}).value);
+  if(n<2 || !(tut>0)){ el.textContent=''; return; }
+  var t=(document.getElementById('foTarih')||{}).value||today();
+  var d=new Date(t+'T00:00:00'); var son=new Date(d.getFullYear(),d.getMonth()+n-1,d.getDate());
+  el.innerHTML='📅 <b>'+n+' ayrı kayıt</b> oluşturulacak: her ay <b>'+TL(tut/n)+'</b> · ilk '+trDate(t)+' → son '+trDate(son.toISOString().slice(0,10));
 }
 async function kaydetFirmaOdeme(){
   var firma=(document.getElementById('foFirma').value||'').trim().replace(/\s+/g,' ');
@@ -2281,10 +2301,28 @@ async function kaydetFirmaOdeme(){
     var hit=(cand.data||[]).filter(function(x){return _foNorm(x.firma_ad)===_foNorm(firma);});
     if(hit.length){ if(!confirm('⚠ Bu tedarikçiye '+trDate(hit[0].tarih)+' '+TL(hit[0].tutar)+' ödeme zaten girilmiş (yakın tarih). Yine de ekle?')){ if(btn){btn.disabled=false;btn.textContent='Kaydet';} return; } }
   }catch(e){}
-  var r=await sb.from('firma_odemeleri').insert({firma_ad:firma, tutar:tutar, tarih:tarih, aciklama:(document.getElementById('foAcik').value||'').trim()||null, giren_ad:CURRENT.ad_soyad});
+  // [TAKSIT-1] kart + N taksit → her ay ayrı kayıt (aylık nakit çıkışı gerçeğe uygun; kuruş farkı ilk taksite biner)
+  var tip=(document.getElementById('foTip')||{}).value||'nakit';
+  var adet=(tip==='kredi_karti')?(parseInt((document.getElementById('foTaksit')||{}).value,10)||1):1;
+  var notu=(document.getElementById('foAcik').value||'').trim();
+  var tipEtiket={nakit:'nakit',havale:'havale',kredi_karti:'kredi kartı'}[tip]||tip;
+  var kayitlar=[];
+  if(adet>1){
+    var taban=Math.floor(tutar/adet*100)/100;
+    var d0=new Date(tarih+'T00:00:00');
+    for(var i=0;i<adet;i++){
+      var td=new Date(d0.getFullYear(), d0.getMonth()+i, d0.getDate());
+      var tt=(i===0)?+(tutar-taban*(adet-1)).toFixed(2):taban;
+      kayitlar.push({firma_ad:firma, tutar:tt, tarih:td.getFullYear()+'-'+String(td.getMonth()+1).padStart(2,'0')+'-'+String(td.getDate()).padStart(2,'0'),
+        aciklama:(notu?notu+' · ':'')+tipEtiket+' · taksit '+(i+1)+'/'+adet, giren_ad:CURRENT.ad_soyad});
+    }
+  } else {
+    kayitlar.push({firma_ad:firma, tutar:tutar, tarih:tarih, aciklama:(notu?notu+' · ':'')+tipEtiket, giren_ad:CURRENT.ad_soyad});
+  }
+  var r=await sb.from('firma_odemeleri').insert(kayitlar);
   if(r.error){ if(btn){btn.disabled=false;btn.textContent='Kaydet';} (console.error('[hata]',r.error),alert('Kaydedilemedi, tekrar deneyin.')); return; }
   window._foOpen=_foNorm(firma);
-  closeModal(); toast('✅ Ödeme kaydedildi',''); ozetOdemeIcerik(document.getElementById('ozetIcerik'));
+  closeModal(); toast('✅ Ödeme kaydedildi', adet>1?(adet+' taksit · toplam '+TL(tutar)):TL(tutar)); ozetOdemeIcerik(document.getElementById('ozetIcerik'));
 }
 async function silFirmaOdeme(id){
   if(!confirm('Bu ödeme kaydını sil?')) return;
