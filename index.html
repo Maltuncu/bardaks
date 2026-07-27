@@ -2225,8 +2225,10 @@ async function ozetOdemeIcerik(c){
   var r=await sb.from('firma_odemeleri').select('*').eq('is_deleted',false).order('tarih',{ascending:false}).limit(1000);
   if(r.error){ c.innerHTML='<div class="empty">Hata: '+escapeHtml(r.error.message)+'</div>'; return; }
   var rows=r.data||[];
+  // [VERGI-1] vergi kayıtları ayrı bölümde gösterilir → firma kartlarında tekrar görünmez
+  var vergiRows=rows.filter(function(x){return _foIsVergi(x.firma_ad);});
   var firms={};
-  rows.forEach(function(x){ var k=_foNorm(x.firma_ad); if(!firms[k]) firms[k]={ad:x.firma_ad,key:k,items:[],toplam:0}; firms[k].items.push(x); firms[k].toplam+=Number(x.tutar||0); });
+  rows.filter(function(x){return !_foIsVergi(x.firma_ad);}).forEach(function(x){ var k=_foNorm(x.firma_ad); if(!firms[k]) firms[k]={ad:x.firma_ad,key:k,items:[],toplam:0}; firms[k].items.push(x); firms[k].toplam+=Number(x.tutar||0); });
   var list=Object.keys(firms).map(function(k){return firms[k];});
   list.forEach(function(f){ f.son=f.items[0]?f.items[0].tarih:''; });
   list.sort(function(a,b){return (b.son||'').localeCompare(a.son||'');});
@@ -2253,6 +2255,7 @@ async function ozetOdemeIcerik(c){
     }
     return head+body+'</div>';
   }).join('');
+  h+=vergiKartHtml(vergiRows); // [VERGI-1] vergiler ayrı bölüm
   // [AYLIK-OZET-1] en altta ay ay toplam — "bu ay ne kadar ödedik" tek bakışta
   var ayTop={};
   rows.forEach(function(x){ var m=(x.tarih||'').slice(0,7); if(!m) return; if(!ayTop[m]) ayTop[m]={t:0,n:0}; ayTop[m].t+=Number(x.tutar||0); ayTop[m].n++; });
@@ -2270,6 +2273,58 @@ async function ozetOdemeIcerik(c){
   c.innerHTML=h;
 }
 function _foToggle(ek){ var k=decodeURIComponent(ek); window._foOpen=(window._foOpen===k)?null:k; ozetOdemeIcerik(document.getElementById('ozetIcerik')); }
+// [VERGI-1] vergi kaydı tanıma + standart tür listesi (yazım tutarlılığı: hep "Vergi · X")
+var VERGI_TURLERI=['KDV','Gelir Stopaj','Muhtasar','Kurumlar','Geçici Vergi','Damga','SGK Prim','Diğer'];
+function _foIsVergi(ad){ return /^vergi\s*[·:-]/i.test(String(ad||'').trim()); }
+function vergiKartHtml(vergiRows){
+  if(!vergiRows.length) return '<div class="card" style="margin-top:14px"><div class="flex-between"><div class="card-title" style="margin:0">Vergiler</div><button class="btn btn-sm" onclick="openVergiOdeme()">+ Vergi</button></div><div class="empty" style="padding:14px">Henüz vergi ödemesi girilmemiş.</div></div>';
+  var yil=String(new Date().getFullYear()), buAy=today().slice(0,7);
+  var yilTop=vergiRows.filter(function(x){return (x.tarih||'').slice(0,4)===yil;}).reduce(function(s,x){return s+Number(x.tutar||0);},0);
+  // tür bazlı yıl kırılımı
+  var tur={}; vergiRows.filter(function(x){return (x.tarih||'').slice(0,4)===yil;}).forEach(function(x){
+    var t=String(x.firma_ad).replace(/^vergi\s*[·:-]\s*/i,'').trim()||'Diğer';
+    tur[t]=(tur[t]||0)+Number(x.tutar||0);
+  });
+  // ay bazlı gruplar
+  var byM={}; vergiRows.forEach(function(x){ var m=(x.tarih||'').slice(0,7); (byM[m]=byM[m]||[]).push(x); });
+  var h='<div class="card" style="margin-top:14px"><div class="flex-between mb"><div class="card-title" style="margin:0">Vergiler</div><button class="btn btn-sm" onclick="openVergiOdeme()">+ Vergi</button></div>';
+  h+='<div style="background:var(--surface2);border-radius:9px;padding:10px 12px;margin-bottom:10px"><div class="flex-between"><strong style="font-size:13px">'+yil+' toplam ödenen vergi</strong><strong style="color:var(--red);font-size:16px">'+TL(yilTop)+'</strong></div>';
+  h+=Object.keys(tur).sort(function(a,b){return tur[b]-tur[a];}).map(function(t){
+    return '<div class="flex-between" style="font-size:12px;color:var(--text-dim);margin-top:4px"><span>'+escapeHtml(t)+'</span><span style="font-weight:700;color:var(--text)">'+TL(tur[t])+'</span></div>';
+  }).join('')+'</div>';
+  h+=Object.keys(byM).sort().reverse().map(function(m){
+    var lst=byM[m], mt=lst.reduce(function(s,x){return s+Number(x.tutar||0);},0), vurgu=(m===buAy);
+    var head='<div class="flex-between" style="margin:10px 0 4px;font-size:12px;font-weight:700;color:var(--accent)"><span>'+(_foAylar[parseInt(m.slice(5,7),10)-1]||'')+' '+m.slice(0,4)+(vurgu?' · bu ay':'')+'</span><span>'+TL(mt)+'</span></div>';
+    return head+lst.map(function(x){
+      var t=String(x.firma_ad).replace(/^vergi\s*[·:-]\s*/i,'').trim();
+      return '<div class="flex-between" style="padding:6px 0;border-bottom:1px solid var(--border)"><div style="min-width:0"><span style="font-size:13px">'+trDate(x.tarih)+' · <b>'+escapeHtml(t)+'</b></span>'+(x.aciklama?'<div style="font-size:11px;color:var(--text-dim)">'+escapeHtml(x.aciklama)+'</div>':'')+'</div><div style="text-align:right;flex:0 0 auto"><span style="font-weight:700">'+TL(x.tutar)+'</span> <button class="btn btn-sec btn-sm" onclick="silFirmaOdeme(\''+x.id+'\')">Sil</button></div></div>';
+    }).join('');
+  }).join('');
+  return h+'</div>';
+}
+function openVergiOdeme(){
+  openModal('<div class="modal-head"><h3>Vergi Ödemesi</h3><button class="modal-close" onclick="closeModal()">×</button></div>'
+    + '<label>Vergi Türü</label><select id="vgTur">'+VERGI_TURLERI.map(function(t){return '<option>'+t+'</option>';}).join('')+'</select>'
+    + '<label class="mt">Ödenen Tutar (₺)</label><input id="vgTutar" type="text" inputmode="decimal" placeholder="örn 22.235,25" oninput="trOnizle(\'vgTutar\',\'vgTutarOnizle\')"><div id="vgTutarOnizle" style="font-size:13px;font-weight:700;color:var(--accent);min-height:18px;margin-top:2px"></div>'
+    + '<label>Ödeme Tarihi</label><input id="vgTarih" type="date" value="'+today()+'">'
+    + '<label>Hangi döneme ait?</label><input id="vgDonem" placeholder="örn: Haziran 2026">'
+    + '<label>Makbuz / Açıklama (opsiyonel)</label><input id="vgNot" placeholder="örn: makbuz 061280-... · gecikme 28,31">'
+    + '<button class="btn btn-block mt" id="vgSaveBtn" onclick="kaydetVergiOdeme()">Kaydet</button>');
+}
+async function kaydetVergiOdeme(){
+  var tur=(document.getElementById('vgTur')||{}).value||'Diğer';
+  var tutar=trNum((document.getElementById('vgTutar')||{}).value);
+  var tarih=(document.getElementById('vgTarih')||{}).value;
+  if(!(tutar>0)){ alert('Geçerli tutar gir'); return; }
+  if(!tarih){ alert('Ödeme tarihi seç'); return; }
+  var donem=((document.getElementById('vgDonem')||{}).value||'').trim();
+  var not=((document.getElementById('vgNot')||{}).value||'').trim();
+  var btn=document.getElementById('vgSaveBtn'); if(btn){btn.disabled=true;btn.textContent='Kaydediliyor…';}
+  var aciklama=[donem?donem+' dönemi':'', not].filter(Boolean).join(' · ')||null;
+  var r=await sb.from('firma_odemeleri').insert({firma_ad:'Vergi · '+tur, tutar:tutar, tarih:tarih, aciklama:aciklama, giren_ad:CURRENT.ad_soyad});
+  if(r.error){ if(btn){btn.disabled=false;btn.textContent='Kaydet';} console.error('[vergi]',r.error); alert('Kaydedilemedi, tekrar deneyin.'); return; }
+  closeModal(); toast('✅ Vergi ödemesi kaydedildi',tur+' · '+TL(tutar)); ozetOdemeIcerik(document.getElementById('ozetIcerik'));
+}
 async function openFirmaOdeme(){
   var names=[];
   try{ var rr=await sb.from('firma_odemeleri').select('firma_ad').eq('is_deleted',false).limit(800); var seen={}; (rr.data||[]).forEach(function(x){ var k=_foNorm(x.firma_ad); if(k&&!seen[k]){seen[k]=1;names.push(x.firma_ad);} }); }catch(e){}
