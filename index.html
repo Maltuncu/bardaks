@@ -2253,6 +2253,20 @@ async function ozetOdemeIcerik(c){
     }
     return head+body+'</div>';
   }).join('');
+  // [AYLIK-OZET-1] en altta ay ay toplam — "bu ay ne kadar ödedik" tek bakışta
+  var ayTop={};
+  rows.forEach(function(x){ var m=(x.tarih||'').slice(0,7); if(!m) return; if(!ayTop[m]) ayTop[m]={t:0,n:0}; ayTop[m].t+=Number(x.tutar||0); ayTop[m].n++; });
+  var aylar=Object.keys(ayTop).sort().reverse();
+  if(aylar.length){
+    var buAy=today().slice(0,7);
+    h+='<div class="card" style="margin-top:14px"><div class="card-title">Aylık Toplam Ödemeler</div><div class="table-wrap"><table><tr><th>Ay</th><th style="text-align:center">Kayıt</th><th style="text-align:right">Toplam</th></tr>';
+    h+=aylar.map(function(m){
+      var a=ayTop[m], vurgu=(m===buAy);
+      return '<tr'+(vurgu?' style="background:var(--surface2)"':'')+'><td'+(vurgu?' style="font-weight:700"':'')+'>'+(_foAylar[parseInt(m.slice(5,7),10)-1]||'')+' '+m.slice(0,4)+(vurgu?' <span style="font-size:10px;color:var(--accent)">bu ay</span>':'')+'</td><td style="text-align:center;color:var(--text-dim)">'+a.n+'</td><td style="text-align:right;font-weight:700'+(vurgu?';color:var(--accent)':'')+'">'+TL(a.t)+'</td></tr>';
+    }).join('');
+    h+='<tr style="font-weight:800;border-top:2px solid var(--border)"><td>TOPLAM</td><td style="text-align:center">'+rows.length+'</td><td style="text-align:right;color:var(--red)">'+TL(aylar.reduce(function(s,m){return s+ayTop[m].t;},0))+'</td></tr>';
+    h+='</table></div><div style="font-size:11px;color:var(--text-dim);margin-top:6px">Tedarikçi + market + faturalar + kira dahil tüm ödemeler. Detay: yukarıdaki firma kartları.</div></div>';
+  }
   c.innerHTML=h;
 }
 function _foToggle(ek){ var k=decodeURIComponent(ek); window._foOpen=(window._foOpen===k)?null:k; ozetOdemeIcerik(document.getElementById('ozetIcerik')); }
